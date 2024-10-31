@@ -56,10 +56,11 @@ def command_loop(client):
             break  # Exit loop after closing
         elif cmd == "help":
             print("Available commands:")
-            print("  --init     : Initialize the client and get client ID")
-            print("  --acquire  : Acquire the lock")
-            print("  --release  : Release the lock")
-            print("  --close    : Close the client connection and exit")
+            print("init     : Initialize the client and get client ID")
+            print("acquire  : Acquire the lock")
+            print("append      : Append to a file")
+            print("release  : Release the lock")
+            print("close    : Close the client connection and exit")
         elif cmd == "exit":
             print("Exiting interactive mode.")
             break
