@@ -40,6 +40,8 @@ class LockClient:
     def RPC_close(self):
         request = lock_pb2.Int(rc=self.client_id)
         response = self.stub.client_close(request)
+        # Explicitly closing the gRPC channel.
+        self.channel.close()
         print("Client connection closed.")
 
 # Interactive command loop for testing and debugging
