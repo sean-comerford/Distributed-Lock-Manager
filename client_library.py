@@ -32,7 +32,7 @@ class LockClient:
         if response.status == lock_pb2.Status.SUCCESS:
             print(f"File appended")
         elif response.status == lock_pb2.Status.LOCK_NOT_ACQUIRED:
-            print(f"Client does not have access to lock")
+            print(f"Lock not acquired")
         elif response.status == lock_pb2.Status.FILE_ERROR:
             print(f"Filename does not exist")
         #print(f"File appended/failed") #Error handling for different responses (goes for all rpc calls)
