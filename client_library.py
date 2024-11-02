@@ -29,7 +29,13 @@ class LockClient:
     def RPC_append_file(self, file, content):
         request = lock_pb2.file_args(filename = file , content = bytes(content, 'utf-8'), client_id=self.client_id) # Specify content to append
         response = self.stub.file_append(request)
-        print(f"File appended/failed") #Error handling for different responses (goes for all rpc calls)
+        if response.status == lock_pb2.Status.SUCCESS:
+            print(f"File appended")
+        elif response.status == lock_pb2.Status.LOCK_NOT_ACQUIRED:
+            print(f"Client does not have access to lock")
+        elif response.status == lock_pb2.Status.FILE_ERROR:
+            print(f"Filename does not exist")
+        #print(f"File appended/failed") #Error handling for different responses (goes for all rpc calls)
 
     def RPC_close(self):
         request = lock_pb2.Int(rc=self.client_id)
