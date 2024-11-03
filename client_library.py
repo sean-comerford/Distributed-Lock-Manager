@@ -17,8 +17,10 @@ class LockClient:
             
     def RPC_lock_acquire(self):
         request = lock_pb2.lock_args(client_id=self.client_id)
+        print(f"Waiting for lock...")
         response = self.stub.lock_acquire(request)
-        print(f"Lock acquired")
+        if response.status == lock_pb2.Status.SUCCESS:
+            print(f"Lock acquired")
 
     def RPC_lock_release(self):
         print(f"Attempting to release lock with client ID: {self.client_id}")
