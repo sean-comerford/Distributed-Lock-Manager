@@ -12,7 +12,7 @@ message lock_args {
 enum Status {
     SUCCESS = 0;   
     FILE_ERROR = 1; 
-    LOCK_NOT_ACQUIRED = 2;   
+    LOCK_NOT_ACQUIRED = 7;   
 }
 
 // response struct, adjust or add any fields you want
