@@ -2,16 +2,46 @@ import grpc
 import lock_pb2
 import lock_pb2_grpc
 import argparse
+import json
 
 class LockClient:
-    def __init__(self):
-        self.channel = grpc.insecure_channel('localhost:56751')
+    def __init__(self, interceptor=None):
+        # Create channel with or without the interceptor
+        with open("service_config.json", "r") as config_file:
+            service_config_json = json.dumps(json.load(config_file))
+        options = []
+        options.append(("grpc.enable_retries", 1))
+        options.append(("grpc.service_config", service_config_json))
+        if interceptor:
+            self.channel = grpc.intercept_channel(grpc.insecure_channel('localhost:56751',options=options),interceptor)
+        else:
+            self.channel = grpc.insecure_channel('localhost:56751',options=options)
+
+        # Create stub
         self.stub = lock_pb2_grpc.LockServiceStub(self.channel)
         self.client_id = None
+    
+    def retries(self, max_retries,place,query):
+        """
+        description: retries a function call up to max_retries times
+        input: max_retries, place, query
+        output: response    
+        """
+        retries = 0
+        while retries < max_retries:
+            try:
+                response = place(query)
+                return response
+            except grpc.RpcError as rpc_error:
+                print(f"Call failed with code: {rpc_error.code()}")
+                retries += 1
+        return False
 
     def RPC_init(self):
         request = lock_pb2.Int()
+        # response = self.retries(max_retries=5,place=self.stub.client_init,query=request)
         response = self.stub.client_init(request)
+        print("oops")
         self.client_id = response.rc
         print(f"Successfully connected to server with client ID: {self.client_id}")
             

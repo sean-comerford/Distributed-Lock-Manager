@@ -4,6 +4,7 @@ import time
 import threading
 import lock_pb2
 import lock_pb2_grpc
+import random
 
 timeout = 100
 port = '127.0.0.1:56751'
@@ -19,10 +20,16 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         self.files = {f'file_{i}.txt': [] for i in range(100)} #Change to however we want out files to look
 
     def client_init(self, request, context):
+        for key, value in context.invocation_metadata():
+            print("Received initial metadata: key=%s value=%s" % (key, value))
         with self.lock:
             self.client_counter += 1
             client_id = self.client_counter
+        if random.random() < 0.5:
+            print("Simulating packet loss: dropping request")
+            time.sleep(2)
         print(f"Client initialized with ID {client_id}")
+        
         return lock_pb2.Int(rc=client_id)
     
     def client_close(self, request, context):
