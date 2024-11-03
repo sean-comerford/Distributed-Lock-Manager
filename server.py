@@ -64,8 +64,8 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
     def file_append(self, request, context):
         if self.lock_owner != request.client_id:
             print(f"Client {request.client_id} does not have access to lock")
-            return lock_pb2.Response(status=lock_pb2.Status.FILE_ERROR)
-        if request.filename not in self.files:
+            return lock_pb2.Response(status=lock_pb2.Status.LOCK_NOT_ACQUIRED)
+        elif request.filename not in self.files:
             print(f"Filename {request.filename} does not exist")
             return lock_pb2.Response(status=lock_pb2.Status.FILE_ERROR)
         print(f"Client {request.client_id} appended to file {request.filename}")

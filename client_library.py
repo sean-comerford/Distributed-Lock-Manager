@@ -17,8 +17,10 @@ class LockClient:
             
     def RPC_lock_acquire(self):
         request = lock_pb2.lock_args(client_id=self.client_id)
+        print(f"Waiting for lock...")
         response = self.stub.lock_acquire(request)
-        print(f"Lock acquired")
+        if response.status == lock_pb2.Status.SUCCESS:
+            print(f"Lock acquired")
 
     def RPC_lock_release(self):
         print(f"Attempting to release lock with client ID: {self.client_id}")
@@ -29,11 +31,19 @@ class LockClient:
     def RPC_append_file(self, file, content):
         request = lock_pb2.file_args(filename = file , content = bytes(content, 'utf-8'), client_id=self.client_id) # Specify content to append
         response = self.stub.file_append(request)
-        print(f"File appended/failed") #Error handling for different responses (goes for all rpc calls)
+        if response.status == lock_pb2.Status.SUCCESS:
+            print(f"File appended")
+        elif response.status == lock_pb2.Status.LOCK_NOT_ACQUIRED:
+            print(f"Lock not acquired")
+        elif response.status == lock_pb2.Status.FILE_ERROR:
+            print(f"Filename does not exist")
+        #print(f"File appended/failed") #Error handling for different responses (goes for all rpc calls)
 
     def RPC_close(self):
         request = lock_pb2.Int(rc=self.client_id)
         response = self.stub.client_close(request)
+        # Explicitly closing the gRPC channel.
+        self.channel.close()
         print("Client connection closed.")
 
 # Interactive command loop for testing and debugging

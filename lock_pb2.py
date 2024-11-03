@@ -13,7 +13,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\nlock.proto\x12\x0clock_service\"\x1e\n\tlock_args\x12\x11\n\tclient_id\x18\x01 \x01(\x05\"0\n\x08Response\x12$\n\x06status\x18\x01 \x01(\x0e\x32\x14.lock_service.Status\"A\n\tfile_args\x12\x10\n\x08\x66ilename\x18\x01 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x02 \x01(\x0c\x12\x11\n\tclient_id\x18\x03 \x01(\x05\"\x11\n\x03Int\x12\n\n\x02rc\x18\x01 \x01(\x05*%\n\x06Status\x12\x0b\n\x07SUCCESS\x10\x00\x12\x0e\n\nFILE_ERROR\x10\x01\x32\xba\x02\n\x0bLockService\x12\x33\n\x0b\x63lient_init\x12\x11.lock_service.Int\x1a\x11.lock_service.Int\x12?\n\x0clock_acquire\x12\x17.lock_service.lock_args\x1a\x16.lock_service.Response\x12?\n\x0clock_release\x12\x17.lock_service.lock_args\x1a\x16.lock_service.Response\x12>\n\x0b\x66ile_append\x12\x17.lock_service.file_args\x1a\x16.lock_service.Response\x12\x34\n\x0c\x63lient_close\x12\x11.lock_service.Int\x1a\x11.lock_service.Intb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\nlock.proto\x12\x0clock_service\"\x1e\n\tlock_args\x12\x11\n\tclient_id\x18\x01 \x01(\x05\"0\n\x08Response\x12$\n\x06status\x18\x01 \x01(\x0e\x32\x14.lock_service.Status\"A\n\tfile_args\x12\x10\n\x08\x66ilename\x18\x01 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x02 \x01(\x0c\x12\x11\n\tclient_id\x18\x03 \x01(\x05\"\x11\n\x03Int\x12\n\n\x02rc\x18\x01 \x01(\x05*<\n\x06Status\x12\x0b\n\x07SUCCESS\x10\x00\x12\x0e\n\nFILE_ERROR\x10\x01\x12\x15\n\x11LOCK_NOT_ACQUIRED\x10\x02\x32\xba\x02\n\x0bLockService\x12\x33\n\x0b\x63lient_init\x12\x11.lock_service.Int\x1a\x11.lock_service.Int\x12?\n\x0clock_acquire\x12\x17.lock_service.lock_args\x1a\x16.lock_service.Response\x12?\n\x0clock_release\x12\x17.lock_service.lock_args\x1a\x16.lock_service.Response\x12>\n\x0b\x66ile_append\x12\x17.lock_service.file_args\x1a\x16.lock_service.Response\x12\x34\n\x0c\x63lient_close\x12\x11.lock_service.Int\x1a\x11.lock_service.Intb\x06proto3')
 
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, globals())
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'lock_pb2', globals())
@@ -21,7 +21,7 @@ if _descriptor._USE_C_DESCRIPTORS == False:
 
   DESCRIPTOR._options = None
   _STATUS._serialized_start=196
-  _STATUS._serialized_end=233
+  _STATUS._serialized_end=256
   _LOCK_ARGS._serialized_start=28
   _LOCK_ARGS._serialized_end=58
   _RESPONSE._serialized_start=60
@@ -30,6 +30,6 @@ if _descriptor._USE_C_DESCRIPTORS == False:
   _FILE_ARGS._serialized_end=175
   _INT._serialized_start=177
   _INT._serialized_end=194
-  _LOCKSERVICE._serialized_start=236
-  _LOCKSERVICE._serialized_end=550
+  _LOCKSERVICE._serialized_start=259
+  _LOCKSERVICE._serialized_end=573
 # @@protoc_insertion_point(module_scope)
