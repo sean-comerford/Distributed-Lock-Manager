@@ -30,7 +30,6 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         if random.random() < 0.5:
             time.sleep(4)
             print("Simulating packet loss: dropping request")
-            #return context.abort(code=grpc.StatusCode.DEADLINE_EXCEEDED,details="injected error")
     
 
         print(f"Client initialized with ID {client_id}")

@@ -7,15 +7,10 @@ import json
 class LockClient:
     def __init__(self, interceptor=None):
         # Create channel with or without the interceptor
-        with open("service_config.json", "r") as config_file:
-            service_config_json = json.dumps(json.load(config_file))
-        options = []
-        options.append(("grpc.enable_retries", 1))
-        options.append(("grpc.service_config", service_config_json))
         if interceptor:
-            self.channel = grpc.intercept_channel(grpc.insecure_channel('localhost:56751',options=options),interceptor)
+            self.channel = grpc.intercept_channel(grpc.insecure_channel('localhost:56751'),interceptor)
         else:
-            self.channel = grpc.insecure_channel('localhost:56751',options=options)
+            self.channel = grpc.insecure_channel('localhost:56751')
 
         # Create stub
         self.stub = lock_pb2_grpc.LockServiceStub(self.channel)
