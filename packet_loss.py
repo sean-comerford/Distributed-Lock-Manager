@@ -1,4 +1,4 @@
-from client_library import LockClient 
+#from client_library import LockClient 
 import grpc
 import random
 import threading
@@ -23,9 +23,20 @@ class RetryInterceptor(grpc.UnaryUnaryClientInterceptor):
     def intercept_unary_unary(self, continuation: Callable, client_call_details, request):
         # Retry loop
         for attempt in range(self.max_attempts):
-            # Add retry count to metadata
-            metadata = client_call_details.metadata or []
-            metadata = list(metadata) + [("retry-attempt", str(attempt))]
+            # Add retry count to metadata, or if it is already there, update the retry attempt number
+            metadata = list(client_call_details.metadata or [])
+
+            # Check if "retry-attempt" key is already in metadata
+            updated = False
+            for i, (key, value) in enumerate(metadata):
+                if key == "retry-attempt":
+                    metadata[i] = (key, str(attempt))
+                    updated = True
+                    break
+            
+            # If "retry-attempt" key is not in metadata, add it	
+            if not updated:
+                metadata.append(("retry-attempt", str(attempt)))
 
             # Update client_call_details with modified metadata and timeout if this is the first attempt
             client_call_details = client_call_details._replace(
@@ -54,15 +65,18 @@ class RetryInterceptor(grpc.UnaryUnaryClientInterceptor):
                 time.sleep(delay)
 
         return response
-
+'''
 client = LockClient(interceptor=RetryInterceptor())
 logging.basicConfig(level=logging.INFO)
 logging.basicConfig()
 client.RPC_init()
+time.sleep(5)
+print(f"{client.client_id}")
+time.sleep(5)
 client.RPC_close()
 #client.RPC_lock_acquire()
 
 #client.RPC_lock_release()
 
 #client.RPC_close()
-
+'''

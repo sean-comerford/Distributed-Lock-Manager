@@ -3,6 +3,7 @@ import lock_pb2
 import lock_pb2_grpc
 import argparse
 import json
+from packet_loss import RetryInterceptor
 
 class LockClient:
     def __init__(self, interceptor=None):
@@ -36,7 +37,6 @@ class LockClient:
         request = lock_pb2.Int()
         # response = self.retries(max_retries=5,place=self.stub.client_init,query=request)
         response = self.stub.client_init(request)
-        print("oops")
         self.client_id = response.rc
         print(f"Successfully connected to server with client ID: {self.client_id}")
             
@@ -100,6 +100,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Initialize client and enter command loop if interactive mode is selected
-    client = LockClient()
+    client = LockClient(interceptor=RetryInterceptor())
     if args.interactive:
         command_loop(client)
