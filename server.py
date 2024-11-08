@@ -76,7 +76,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         with self.lock:
             # simulate slow server
             print(f"Simulating slow server: sleeping for 5 seconds")
-            time.sleep(5)
+            time.sleep(30)
             print(f"Server finished sleeping")
             self.client_counter += 1
             client_id = self.client_counter

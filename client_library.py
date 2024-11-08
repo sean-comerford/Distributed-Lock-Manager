@@ -38,8 +38,7 @@ class LockClient:
         request = lock_pb2.Int()
         # response = self.retries(max_retries=5,place=self.stub.client_init,query=request)
         response = self.stub.client_init(request)
-        print("oops")
-        self.client_id = response.rc
+        self.client_id = response.id_num
         print(f"Successfully connected to server with client ID: {self.client_id}")
             
     def RPC_lock_acquire(self):

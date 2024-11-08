@@ -7,6 +7,7 @@ import logging
 import asyncio
 from typing import Callable
 import uuid
+import lock_pb2
 
     
 class RetryInterceptor(grpc.UnaryUnaryClientInterceptor):
@@ -55,9 +56,29 @@ class RetryInterceptor(grpc.UnaryUnaryClientInterceptor):
 
             response = None
             try:
+                # Interceptor receives the response back from the server
                 response = continuation(client_call_details, request)
+                print(f"Response from server is {response}")
+                # If the response is an error (e.g. a timeout waiting for the server to respond), raise the error
                 if type(response) == grpc._channel._InactiveRpcError:
+                    # Raise error to begin retry procedure
                     raise response
+                # If the response is a UnaryOutcome, unwrap it to get the actual response
+                elif isinstance(response, grpc._interceptor._UnaryOutcome):
+                    print(f"Only unwrapping if response is a UnaryOutcome")
+                    actual_response = response.result()
+                    print(f"Unwrapped response is {actual_response}")
+                else:
+                    print(f"Unexpected response from the server: {response}")
+                
+                # If the response status is WORKING_ON_IT, sleep for 5 seconds and try again
+                if actual_response.status == lock_pb2.Status.WORKING_ON_IT:
+                    print(f"Got message back from client that it is working on request, sleeping")
+                    time.sleep(5)
+                    print(f"Finished sleeping, trying again")
+                    # Skip this iteration and move to the next iteration.
+                    continue
+                # If the response is not an error or WORKING_ON_IT, return the response to the client
                 return response  # Successful call, return the response
             except grpc.RpcError as e:
                 # If the status code is not in retryable codes, raise the error
