@@ -28,6 +28,7 @@ class RetryInterceptor(grpc.UnaryUnaryClientInterceptor):
 
         # Retry loop
         for attempt in range(self.max_attempts):
+            print(f"Attempt number is {attempt}")
             # Add retry count to metadata, or if it is already there, update the retry attempt number
             metadata = list(client_call_details.metadata or [])
 
@@ -73,13 +74,22 @@ class RetryInterceptor(grpc.UnaryUnaryClientInterceptor):
                 
                 # If the response status is WORKING_ON_IT, sleep for 5 seconds and try again
                 if actual_response.status == lock_pb2.Status.WORKING_ON_IT:
-                    print(f"Got message back from client that it is working on request, sleeping")
+                    print(f"Got message back from server that it is working on request, sleeping for a few seconds before retrying")
                     time.sleep(5)
                     print(f"Finished sleeping, trying again")
                     # Skip this iteration and move to the next iteration.
-                    continue
+                    if attempt < self.max_attempts - 1:
+                        continue
+                    else:
+                        # If the max attempts have been reached and the server is still working on the request, raise an error
+                        # May include switching to a different server in the future.
+                        raise grpc.RpcError("Max attempts reached")
+                    
                 # If the response is not an error or WORKING_ON_IT, return the response to the client
-                return response  # Successful call, return the response
+                print(f"Response is not timeout error or WORKING_ON_IT, returning response to client: {actual_response}")
+                return response
+                
+                #return response  # Successful call, return the response
             except grpc.RpcError as e:
                 # If the status code is not in retryable codes, raise the error
                 if e.code() not in self.retryable_status_codes:

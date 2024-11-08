@@ -76,7 +76,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         with self.lock:
             # simulate slow server
             print(f"Simulating slow server: sleeping for 5 seconds")
-            time.sleep(30)
+            time.sleep(7)
             print(f"Server finished sleeping")
             self.client_counter += 1
             client_id = self.client_counter
@@ -85,7 +85,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         self.update_cache(request_id, response)
         print(f"The updated cache is {self.response_cache}")
         # Testing packet loss
-        if random.random() < 0:
+        if random.random() < 0.9:
             print("Simulating packet loss: dropping response from server")
             # Set long time to simulate packet loss
             time.sleep(15)
