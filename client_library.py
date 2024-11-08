@@ -38,12 +38,9 @@ class LockClient:
         request = lock_pb2.Int()
         # response = self.retries(max_retries=5,place=self.stub.client_init,query=request)
         response = self.stub.client_init(request)
-        print(f"Response from server is {response}")
-        if response.status == lock_pb2.Status.WORKING_ON_IT:
-            print("Server is still processing the request. Please try again later.")
-        elif isinstance(response, lock_pb2.Int):
-            self.client_id = response.rc
-            print(f"Successfully connected to server with client ID: {self.client_id}")
+        print("oops")
+        self.client_id = response.rc
+        print(f"Successfully connected to server with client ID: {self.client_id}")
             
     def RPC_lock_acquire(self):
         request = lock_pb2.lock_args(client_id=self.client_id)

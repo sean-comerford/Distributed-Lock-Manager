@@ -72,12 +72,16 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         # If request_id is not cached, cache the response_ID, process it, cache the response and then return the response
         print(f"No cache response found for request {request_id}. Processing request")
         self.initialise_cache(request_id)
+        print(f"Initialised cache with request {request_id} and value {self.response_cache[request_id]}")
         with self.lock:
             # simulate slow server
+            print(f"Simulating slow server: sleeping for 5 seconds")
             time.sleep(5)
+            print(f"Server finished sleeping")
             self.client_counter += 1
             client_id = self.client_counter
-        response = lock_pb2.Response(rc=client_id)
+        response = lock_pb2.Response(status= lock_pb2.Status.SUCCESS, id_num=client_id)
+        print(f"Response is {response}")
         self.update_cache(request_id, response)
         print(f"The updated cache is {self.response_cache}")
         # Testing packet loss

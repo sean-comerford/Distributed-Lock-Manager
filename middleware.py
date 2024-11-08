@@ -7,7 +7,6 @@ import logging
 import asyncio
 from typing import Callable
 import uuid
-import lock_pb2
 
     
 class RetryInterceptor(grpc.UnaryUnaryClientInterceptor):
@@ -23,16 +22,8 @@ class RetryInterceptor(grpc.UnaryUnaryClientInterceptor):
         return min(self.initial_backoff * (self.backoff_multiplier ** attempt), self.max_backoff)
 
     def intercept_unary_unary(self, continuation: Callable, client_call_details, request):
-        call_counter = 1
-        print(f"intercept_unary_unary has been called {call_counter} times")
-        call_counter += 1
         # Generate unique request ID
         unique_request_id = str(uuid.uuid4())
-        # Set the initial timeout
-        initial_timeout = 10
-        # Set the max timeout
-        max_timeout = 20
-
 
         # Retry loop
         for attempt in range(self.max_attempts):
@@ -61,38 +52,14 @@ class RetryInterceptor(grpc.UnaryUnaryClientInterceptor):
                 timeout=2  # Set the call timeout to 10 seconds
             )
 
+
             response = None
             try:
                 response = continuation(client_call_details, request)
-                print(f"response is {response}")
-                if isinstance(response, grpc._channel._InactiveRpcError):
+                if type(response) == grpc._channel._InactiveRpcError:
                     raise response
-                
-                if isinstance(response, grpc._interceptor._UnaryOutcome):
-                    print(f"Only unwrapping if response is a UnaryOutcome")
-                    actual_response = response.result()
-                    print(f"Unwrapped response is {actual_response}")
-                else:
-                    actual_response = response
-                #print(f"Type of actual_response: {type(actual_response)}, attributes: {dir(actual_response)}")
-
-
-                # Check if server is still working on request, if so, increase timeout
-                # Timeout is the time the server has to give the client a response
-                # If the client knows the server is working on it, then we increase the timeout to allow the server more time
-                if actual_response.status == lock_pb2.Status.WORKING_ON_IT:
-                    print(f"Server is still processing the request attempt {attempt + 1}/{self.max_attempts}. Increasing timeout.")
-                    # Increasing timeout for the next attempt, up to a max limit
-                    initial_timeout = 10
-                    #initial_timeout = min(initial_timeout * 2, max_timeout)
-                    print(f"Waiting before next retry")
-                    time.sleep(10)
-                    continue
-                else:
-                    print(f"Returning response {actual_response}")
-                    return actual_response  # Successful call, return the response
+                return response  # Successful call, return the response
             except grpc.RpcError as e:
-                print(f"Error has been raised: {e}")
                 # If the status code is not in retryable codes, raise the error
                 if e.code() not in self.retryable_status_codes:
                     raise
@@ -103,10 +70,7 @@ class RetryInterceptor(grpc.UnaryUnaryClientInterceptor):
 
                 # Wait before retrying
                 delay = self._retry_delay(attempt)
-                if attempt == 0:
-                    print(f"Initial attempt failed with {e.code()}. Retrying in {delay} seconds.")
-                else:
-                    print(f"Retry attempt {attempt} failed with {e.code()}. Retrying in {delay} seconds.")
+                print(f"Retry attempt {attempt + 1} failed with {e.code()}. Retrying in {delay} seconds.")
                 time.sleep(delay)
 
         return response
