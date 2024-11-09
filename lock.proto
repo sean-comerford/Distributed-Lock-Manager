@@ -11,8 +11,7 @@ message lock_args {
 // server return Status, we will add more in the future
 enum Status {
     SUCCESS = 0;   
-    FILE_ERROR = 1;    
-    DEADLINE_EXCEEDED = 4;
+    FILE_ERROR = 1;
 }
 
 // response struct, adjust or add any fields you want

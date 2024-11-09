@@ -11,6 +11,8 @@ import logging
 timeout = 100
 port = '127.0.0.1:56751'
 
+
+
 class LockService(lock_pb2_grpc.LockServiceServicer):
 
     def __init__(self):
@@ -21,22 +23,28 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         self.lock_owner = None
         self.files = {f'file_{i}.txt': [] for i in range(100)} #Change to however we want out files to look
 
+    def print_metadata(self, context):
+        '''Helper method to print metadata from client'''
+        metadata_str = ", ".join(f"{key}={value}" for key, value in context.invocation_metadata())
+        print(f"Received initial metadata from client: {metadata_str}")
+
+
     def client_init(self, request, context):
-        for key, value in context.invocation_metadata():
-            print("Received initial metadata: key=%s value=%s" % (key, value))
+        self.print_metadata(context)
         with self.lock:
             self.client_counter += 1
             client_id = self.client_counter
-        if random.random() < 0.5:
-            time.sleep(4)
-            print("Simulating packet loss: dropping request")
-    
-
+        # Testing packet loss
+        if random.random() < 0.7:
+            print("Simulating packet loss: dropping response from server")
+            # Set long time to simulate packet loss
+            time.sleep(1000)
+            
         print(f"Client initialized with ID {client_id}")
-        
         return lock_pb2.Int(rc=client_id)
     
     def client_close(self, request, context):
+        self.print_metadata(context)
         with self.lock:
             if self.lock_owner == request.rc:
                 self.locked = False
@@ -48,6 +56,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             return lock_pb2.Response(status=lock_pb2.Status.SUCCESS)
     
     def lock_acquire(self, request, context):
+        self.print_metadata(context)
         with self.condition:
             while self.locked:
                 print(f"Client {request.client_id} waiting for lock.")
@@ -58,6 +67,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             return lock_pb2.Response(status=lock_pb2.Status.SUCCESS)
         
     def lock_release(self, request, context):
+        self.print_metadata(context)
         with self.condition:
             if self.locked and self.lock_owner == request.client_id:
                 self.locked = False
@@ -73,6 +83,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
                 return lock_pb2.Response(status=lock_pb2.Status.FILE_ERROR) #Again Not file error
     
     def file_append(self, request, context):
+        self.print_metadata(context)
         if self.lock_owner != request.client_id:
             print(f"Client {request.client_id} does not have access to lock")
             return lock_pb2.Response(status=lock_pb2.Status.FILE_ERROR)
