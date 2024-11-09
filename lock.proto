@@ -12,6 +12,7 @@ message lock_args {
 enum Status {
     SUCCESS = 0;   
     FILE_ERROR = 1;
+    LOCK_NOT_ACQUIRED = 7;
     WORKING_ON_IT = 22;
 }
 

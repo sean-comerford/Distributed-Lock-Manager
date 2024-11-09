@@ -55,7 +55,6 @@ class LockClient:
     def RPC_append_file(self, file, content):
         request = lock_pb2.file_args(filename = file , content = bytes(content, 'utf-8'), client_id=self.client_id) # Specify content to append
         response = self.stub.file_append(request)
-        print(f"File appended/failed") #Error handling for different responses (goes for all rpc calls)
 
     def RPC_close(self):
         request = lock_pb2.Int(rc=self.client_id)

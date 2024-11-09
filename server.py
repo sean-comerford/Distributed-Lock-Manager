@@ -172,7 +172,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         if self.lock_owner != request.client_id:
             print(f"Simulating slow server")
             time.sleep(7)
-            response = lock_pb2.Response(status=lock_pb2.Status.FILE_ERROR)
+            response = lock_pb2.Response(status=lock_pb2.Status.LOCK_NOT_ACQUIRED)
             self.update_cache(request_id, response)
             print(f"Client {request.client_id} does not have access to lock")
             return response
@@ -183,13 +183,13 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             self.update_cache(request_id, response)
             print(f"Filename {request.filename} does not exist")
             return response
-        print(f"Client {request.client_id} appended to file {request.filename}")
         with open(request.filename, 'ab') as file:
             print(f"Simulating slow server")
             time.sleep(7)
             file.write(request.content)
         response = lock_pb2.Response(status=lock_pb2.Status.SUCCESS)
         self.update_cache(request_id, response)
+        print(f"Client {request.client_id} appended to file {request.filename}")
         return response
     
 if __name__ == "__main__":

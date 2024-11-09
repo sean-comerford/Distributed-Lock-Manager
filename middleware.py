@@ -85,6 +85,10 @@ class RetryInterceptor(grpc.UnaryUnaryClientInterceptor):
                         # May include switching to a different server in the future.
                         raise grpc.RpcError("Max attempts reached")
                     
+                if actual_response.status == lock_pb2.Status.LOCK_NOT_ACQUIRED:
+                    print(f"Lock not acquired, must acquire lock before appending file")
+                    return response
+                    
                 # If the response is not an error or WORKING_ON_IT, return the response to the client
                 print(f"Response is not timeout error or WORKING_ON_IT, returning response to client: {actual_response}")
                 return response
