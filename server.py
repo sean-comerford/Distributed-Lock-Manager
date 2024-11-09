@@ -7,6 +7,7 @@ import lock_pb2_grpc
 import random
 import asyncio
 import logging
+from collections import OrderedDict
 
 timeout = 100
 port = '127.0.0.1:56751'
@@ -23,7 +24,28 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         self.lock_owner = None
         self.files = {f'file_{i}.txt': [] for i in range(100)} #Change to however we want out files to look
         # Cache to store the processed requests and their responses
-        self.response_cache = {}
+        self.response_cache = OrderedDict()
+        self.cache_lock = threading.Lock()
+        self.start_cache_clear_thread()
+
+    def start_cache_clear_thread(self):
+        '''Start a thread to clear the oldest requests from the cache every 30 minutes'''
+        def clear_cache():
+            while True:
+                time.sleep(1800)
+                self.clear_oldest_half_of_cache()
+                print(f"Oldest half of cache cleared")
+        
+        thread = threading.Thread(target=clear_cache, daemon=True)
+        thread.start()
+
+    def clear_oldest_half_of_cache(self):
+        '''Clear the oldest half of the cache'''
+        with self.cache_lock:
+            cache_size = len(self.response_cache)
+            items_to_remove = cache_size // 2
+            for _ in range(items_to_remove):
+                self.response_cache.popitem(last=False)
 
     def get_request_id(self, context):
         '''Helper method to get request ID from client'''
