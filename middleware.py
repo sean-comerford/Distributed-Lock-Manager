@@ -28,7 +28,11 @@ class RetryInterceptor(grpc.UnaryUnaryClientInterceptor):
 
         # Retry loop
         for attempt in range(self.max_attempts):
-            print(f"Attempt number is {attempt}")
+            if attempt == 0:
+                print(f"Initial attempt")
+            else:
+                print(f"Retry number {attempt} ")
+
             # Add retry count to metadata, or if it is already there, update the retry attempt number
             metadata = list(client_call_details.metadata or [])
 
@@ -59,24 +63,20 @@ class RetryInterceptor(grpc.UnaryUnaryClientInterceptor):
             try:
                 # Interceptor receives the response back from the server
                 response = continuation(client_call_details, request)
-                print(f"Response from server is {response}")
                 # If the response is an error (e.g. a timeout waiting for the server to respond), raise the error
                 if type(response) == grpc._channel._InactiveRpcError:
                     # Raise error to begin retry procedure
                     raise response
                 # If the response is a UnaryOutcome, unwrap it to get the actual response
                 elif isinstance(response, grpc._interceptor._UnaryOutcome):
-                    print(f"Only unwrapping if response is a UnaryOutcome")
                     actual_response = response.result()
-                    print(f"Unwrapped response is {actual_response}")
                 else:
                     print(f"Unexpected response from the server: {response}")
                 
                 # If the response status is WORKING_ON_IT, sleep for 5 seconds and try again
                 if actual_response.status == lock_pb2.Status.WORKING_ON_IT:
-                    print(f"Got message back from server that it is working on request, sleeping for a few seconds before retrying")
-                    time.sleep(5)
-                    print(f"Finished sleeping, trying again")
+                    print(f"Server is still working on request, delaying before retrying")
+                    time.sleep(2)
                     # Skip this iteration and move to the next iteration.
                     if attempt < self.max_attempts - 1:
                         continue
@@ -90,7 +90,7 @@ class RetryInterceptor(grpc.UnaryUnaryClientInterceptor):
                     return response
                     
                 # If the response is not an error or WORKING_ON_IT, return the response to the client
-                print(f"Response is not timeout error or WORKING_ON_IT, returning response to client: {actual_response}")
+                print(f"Response received from server, returning response to client {actual_response}")
                 return response
                 
                 #return response  # Successful call, return the response
@@ -105,7 +105,10 @@ class RetryInterceptor(grpc.UnaryUnaryClientInterceptor):
 
                 # Wait before retrying
                 delay = self._retry_delay(attempt)
-                print(f"Retry attempt {attempt + 1} failed with {e.code()}. Retrying in {delay} seconds.")
+                if attempt == 0:
+                    print(f"Initial attempt failed with {e.code()}. Retrying in {delay} seconds.")
+                else:
+                    print(f"Retry {attempt + 1} failed with {e.code()}. Retrying in {delay} seconds.")
                 time.sleep(delay)
 
         return response
