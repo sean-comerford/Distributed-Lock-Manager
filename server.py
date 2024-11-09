@@ -84,10 +84,6 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         # If there is no response ready, process the request and create a response
         request_id = self.get_request_id(context)
         with self.lock:
-            # Simulate slow server
-            print(f"Simulating slow server")
-            time.sleep(3)
-            print(f"Server finished sleeping")
             # Process request
             self.client_counter += 1
             client_id = self.client_counter
@@ -170,22 +166,16 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         # If there is no response ready, process the request and create a response
         request_id = self.get_request_id(context)
         if self.lock_owner != request.client_id:
-            print(f"Simulating slow server")
-            time.sleep(7)
             response = lock_pb2.Response(status=lock_pb2.Status.LOCK_NOT_ACQUIRED)
             self.update_cache(request_id, response)
             print(f"Client {request.client_id} does not have access to lock")
             return response
         if request.filename not in self.files:
-            print(f"Simulating slow server")
-            time.sleep(7)
             response = lock_pb2.Response(status=lock_pb2.Status.FILE_ERROR)
             self.update_cache(request_id, response)
             print(f"Filename {request.filename} does not exist")
             return response
         with open(request.filename, 'ab') as file:
-            print(f"Simulating slow server")
-            time.sleep(7)
             file.write(request.content)
         response = lock_pb2.Response(status=lock_pb2.Status.SUCCESS)
         self.update_cache(request_id, response)
