@@ -2,17 +2,43 @@ import grpc
 import lock_pb2
 import lock_pb2_grpc
 import argparse
+import json
+from middleware import RetryInterceptor
+import time
 
 class LockClient:
-    def __init__(self):
-        self.channel = grpc.insecure_channel('localhost:56751')
+    def __init__(self, interceptor=None):
+        # Create channel with or without the interceptor
+        if interceptor:
+            self.channel = grpc.intercept_channel(grpc.insecure_channel('localhost:56751'),interceptor)
+        else:
+            self.channel = grpc.insecure_channel('localhost:56751')
+
+        # Create stub
         self.stub = lock_pb2_grpc.LockServiceStub(self.channel)
         self.client_id = None
+    
+    def retries(self, max_retries,place,query):
+        """
+        description: retries a function call up to max_retries times
+        input: max_retries, place, query
+        output: response    
+        """
+        retries = 0
+        while retries < max_retries:
+            try:
+                response = place(query)
+                return response
+            except grpc.RpcError as rpc_error:
+                print(f"Call failed with code: {rpc_error.code()}")
+                retries += 1
+        return False
 
     def RPC_init(self):
         request = lock_pb2.Int()
+        # response = self.retries(max_retries=5,place=self.stub.client_init,query=request)
         response = self.stub.client_init(request)
-        self.client_id = response.rc
+        self.client_id = response.id_num
         print(f"Successfully connected to server with client ID: {self.client_id}")
             
     def RPC_lock_acquire(self):
@@ -31,13 +57,6 @@ class LockClient:
     def RPC_append_file(self, file, content):
         request = lock_pb2.file_args(filename = file , content = bytes(content, 'utf-8'), client_id=self.client_id) # Specify content to append
         response = self.stub.file_append(request)
-        if response.status == lock_pb2.Status.SUCCESS:
-            print(f"File appended")
-        elif response.status == lock_pb2.Status.LOCK_NOT_ACQUIRED:
-            print(f"Lock not acquired")
-        elif response.status == lock_pb2.Status.FILE_ERROR:
-            print(f"Filename does not exist")
-        #print(f"File appended/failed") #Error handling for different responses (goes for all rpc calls)
 
     def RPC_close(self):
         request = lock_pb2.Int(rc=self.client_id)
@@ -85,6 +104,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Initialize client and enter command loop if interactive mode is selected
-    client = LockClient()
+    client = LockClient(interceptor=RetryInterceptor())
     if args.interactive:
         command_loop(client)

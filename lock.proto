@@ -13,11 +13,13 @@ enum Status {
     SUCCESS = 0;   
     FILE_ERROR = 1; 
     LOCK_NOT_ACQUIRED = 7;   
+    WORKING_ON_IT = 22;
 }
 
 // response struct, adjust or add any fields you want
 message Response {
     Status status = 1;
+    int32 id_num = 2;
 }
 
 // file append arguments, add any fields you want
@@ -33,9 +35,9 @@ message Int {
 }
 
 service LockService {
-    rpc client_init(Int) returns (Int);
+    rpc client_init(Int) returns (Response);
     rpc lock_acquire(lock_args) returns (Response);
     rpc lock_release(lock_args) returns (Response);
     rpc file_append(file_args) returns (Response);
-    rpc client_close(Int) returns (Int);
+    rpc client_close(Int) returns (Response);
 }
