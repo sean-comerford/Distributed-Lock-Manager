@@ -17,6 +17,7 @@ class LockClient:
         # Create stub
         self.stub = lock_pb2_grpc.LockServiceStub(self.channel)
         self.client_id = None
+        self.lock_val = None
     
     def retries(self, max_retries,place,query):
         """
@@ -42,19 +43,35 @@ class LockClient:
         print(f"Successfully connected to server with client ID: {self.client_id}")
             
     def RPC_lock_acquire(self):
-        request = lock_pb2.lock_args(client_id=self.client_id)
-        response = self.stub.lock_acquire(request)
-        print(f"Lock acquired")
+        if self.lock_val == None:
+            request = lock_pb2.lock_args(client_id=self.client_id)
+            response = self.stub.lock_acquire(request)
+            self.lock_val = response.id_num
+            print(f"Lock acquired")
+        else:
+            print("LOCK ALREADY OWNED")
 
     def RPC_lock_release(self):
         print(f"Attempting to release lock with client ID: {self.client_id}")
-        request = lock_pb2.lock_args(client_id=self.client_id)
+        request = lock_pb2.lock_args(client_id=self.client_id,lock_val=self.lock_val)
         response = self.stub.lock_release(request)
-        print(f"Lock released")
+        if response.status == lock_pb2.Status.SUCCESS:
+            print(f"Lock released")
+        else:
+            print("DID NOT OWN LOCK - reset lock_val")
+        self.lock_val = None
 
     def RPC_append_file(self, file, content):
-        request = lock_pb2.file_args(filename = file , content = bytes(content, 'utf-8'), client_id=self.client_id) # Specify content to append
-        response = self.stub.file_append(request)
+        if(self.lock_val != None):
+            request = lock_pb2.file_args(filename = file , content = bytes(content, 'utf-8'), client_id=self.client_id,lock_val=self.lock_val) # Specify content to append
+            response = self.stub.file_append(request)
+            if response.status == lock_pb2.Status.LOCK_NOT_ACQUIRED:
+                print("DID NOT OWN LOCK - reset lock_val")
+                self.lock_val = None
+        else:
+            print("LOCK NOT OWNED")
+
+        print(response)
 
     def RPC_close(self):
         request = lock_pb2.Int(rc=self.client_id)

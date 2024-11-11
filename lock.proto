@@ -5,6 +5,7 @@ package lock_service;
 // lock acquire/release arguments, add any fields you want
 message lock_args {
     int32 client_id = 1;
+    int32 lock_val = 2;
     
 }
 
@@ -27,6 +28,7 @@ message file_args {
     string filename = 1;
     bytes content = 2;
     int32 client_id = 3;
+    int32 lock_val = 4;
 }
 
 // field to hold an int, because the arguments and return values should be "message" type

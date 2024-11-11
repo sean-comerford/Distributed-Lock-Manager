@@ -37,7 +37,7 @@ class LockServiceStub(object):
         self.client_init = channel.unary_unary(
                 '/lock_service.LockService/client_init',
                 request_serializer=lock__pb2.Int.SerializeToString,
-                response_deserializer=lock__pb2.Int.FromString,
+                response_deserializer=lock__pb2.Response.FromString,
                 _registered_method=True)
         self.lock_acquire = channel.unary_unary(
                 '/lock_service.LockService/lock_acquire',
@@ -57,7 +57,7 @@ class LockServiceStub(object):
         self.client_close = channel.unary_unary(
                 '/lock_service.LockService/client_close',
                 request_serializer=lock__pb2.Int.SerializeToString,
-                response_deserializer=lock__pb2.Int.FromString,
+                response_deserializer=lock__pb2.Response.FromString,
                 _registered_method=True)
 
 
@@ -100,7 +100,7 @@ def add_LockServiceServicer_to_server(servicer, server):
             'client_init': grpc.unary_unary_rpc_method_handler(
                     servicer.client_init,
                     request_deserializer=lock__pb2.Int.FromString,
-                    response_serializer=lock__pb2.Int.SerializeToString,
+                    response_serializer=lock__pb2.Response.SerializeToString,
             ),
             'lock_acquire': grpc.unary_unary_rpc_method_handler(
                     servicer.lock_acquire,
@@ -120,7 +120,7 @@ def add_LockServiceServicer_to_server(servicer, server):
             'client_close': grpc.unary_unary_rpc_method_handler(
                     servicer.client_close,
                     request_deserializer=lock__pb2.Int.FromString,
-                    response_serializer=lock__pb2.Int.SerializeToString,
+                    response_serializer=lock__pb2.Response.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -149,7 +149,7 @@ class LockService(object):
             target,
             '/lock_service.LockService/client_init',
             lock__pb2.Int.SerializeToString,
-            lock__pb2.Int.FromString,
+            lock__pb2.Response.FromString,
             options,
             channel_credentials,
             insecure,
@@ -257,7 +257,7 @@ class LockService(object):
             target,
             '/lock_service.LockService/client_close',
             lock__pb2.Int.SerializeToString,
-            lock__pb2.Int.FromString,
+            lock__pb2.Response.FromString,
             options,
             channel_credentials,
             insecure,

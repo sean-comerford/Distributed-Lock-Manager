@@ -16,7 +16,7 @@ port = '127.0.0.1:56751'
 
 class LockService(lock_pb2_grpc.LockServiceServicer):
 
-    def __init__(self):
+    def __init__(self,deadline=8):
         self.locked = False #Is Lock locked?
         self.lock = threading.Lock() #Mutual Exclusion on shared resources (self.locked, client_counter and lock_owner)
         self.condition = threading.Condition(self.lock) #Coordinate access to the lock by allowing threads (clients) to wait until lock availabel
@@ -26,7 +26,29 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         # Cache to store the processed requests and their responses
         self.response_cache = OrderedDict()
         self.cache_lock = threading.Lock()
+        self.lock_counter = 0
+        self.periodic_thread = threading.Thread(target=self._execute_periodically, daemon=True)
+        self.periodic_thread.start()
+        self.deadline = deadline
         self.start_cache_clear_thread()
+
+    def _execute_periodically(self):
+        """Executes the periodic task every `self.deadline` seconds.
+        this thread checks that if a lock owner has been set
+        if so, it waits for the deadline to pass and if the lock owner is still the same
+        it removes the lock from that client
+        
+        """
+        while True:
+            if self.lock_owner is not None:
+                cur_lock_owner = self.lock_owner
+                time.sleep(self.deadline)
+                if cur_lock_owner == self.lock_owner:
+                    with self.lock:
+                        self.locked = False
+                        self.lock_owner = None
+                        self.condition.notify_all()
+                    print("LOCK OWNER OVER DEADLINE REMOVING LOCK")
 
     def start_cache_clear_thread(self):
         '''Start a thread to clear the oldest requests from the cache every 30 minutes'''
@@ -148,7 +170,8 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
                 self.condition.wait()
             self.locked = True
             self.lock_owner = request.client_id
-            response = lock_pb2.Response(status=lock_pb2.Status.SUCCESS)
+            self.lock_counter += 1
+            response = lock_pb2.Response(status=lock_pb2.Status.SUCCESS,id_num=self.lock_counter)
             self.update_cache(request_id, response)
             print(f"Lock granted to client {request.client_id}")
             return response
@@ -161,7 +184,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         # If there is no response ready, process the request and create a response
         request_id = self.get_request_id(context)
         with self.condition:
-            if self.locked and self.lock_owner == request.client_id:
+            if self.locked and self.lock_owner == request.client_id and self.lock_counter == request.lock_val:
                 self.locked = False
                 self.lock_owner = None
                 self.condition.notify_all()
@@ -187,7 +210,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             return response
         # If there is no response ready, process the request and create a response
         request_id = self.get_request_id(context)
-        if self.lock_owner != request.client_id:
+        if self.lock_owner == None or self.lock_owner != request.client_id or self.lock_counter != request.lock_val:
             response = lock_pb2.Response(status=lock_pb2.Status.LOCK_NOT_ACQUIRED)
             self.update_cache(request_id, response)
             print(f"Client {request.client_id} does not have access to lock")
