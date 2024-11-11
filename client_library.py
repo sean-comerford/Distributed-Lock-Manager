@@ -3,7 +3,8 @@ import lock_pb2
 import lock_pb2_grpc
 import argparse
 import json
-from packet_loss import RetryInterceptor
+from middleware import RetryInterceptor
+import time
 
 class LockClient:
     def __init__(self, interceptor=None):
@@ -37,7 +38,7 @@ class LockClient:
         request = lock_pb2.Int()
         # response = self.retries(max_retries=5,place=self.stub.client_init,query=request)
         response = self.stub.client_init(request)
-        self.client_id = response.rc
+        self.client_id = response.id_num
         print(f"Successfully connected to server with client ID: {self.client_id}")
             
     def RPC_lock_acquire(self):
@@ -54,7 +55,6 @@ class LockClient:
     def RPC_append_file(self, file, content):
         request = lock_pb2.file_args(filename = file , content = bytes(content, 'utf-8'), client_id=self.client_id) # Specify content to append
         response = self.stub.file_append(request)
-        print(f"File appended/failed") #Error handling for different responses (goes for all rpc calls)
 
     def RPC_close(self):
         request = lock_pb2.Int(rc=self.client_id)
