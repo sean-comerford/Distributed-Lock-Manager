@@ -11,8 +11,8 @@ message lock_args {
 // server return Status, we will add more in the future
 enum Status {
     SUCCESS = 0;   
-    FILE_ERROR = 1;
-    LOCK_NOT_ACQUIRED = 7;
+    FILE_ERROR = 1; 
+    LOCK_NOT_ACQUIRED = 7;   
     WORKING_ON_IT = 22;
 }
 
