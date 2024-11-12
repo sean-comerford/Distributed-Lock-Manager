@@ -15,6 +15,7 @@ enum Status {
     FILE_ERROR = 1; 
     LOCK_NOT_ACQUIRED = 7;   
     WORKING_ON_IT = 22;
+    LOCK_EXPIRED = 23;
 }
 
 // response struct, adjust or add any fields you want

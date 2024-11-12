@@ -8,6 +8,7 @@ import random
 import asyncio
 import logging
 from collections import OrderedDict
+import argparse
 
 timeout = 100
 port = '127.0.0.1:56751'
@@ -16,7 +17,7 @@ port = '127.0.0.1:56751'
 
 class LockService(lock_pb2_grpc.LockServiceServicer):
 
-    def __init__(self,deadline=8):
+    def __init__(self,deadline=8,drop=False):
         self.locked = False #Is Lock locked?
         self.lock = threading.Lock() #Mutual Exclusion on shared resources (self.locked, client_counter and lock_owner)
         self.condition = threading.Condition(self.lock) #Coordinate access to the lock by allowing threads (clients) to wait until lock availabel
@@ -27,6 +28,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         self.response_cache = OrderedDict()
         self.cache_lock = threading.Lock()
         self.lock_counter = 0
+        self.drop = drop
         self.periodic_thread = threading.Thread(target=self._execute_periodically, daemon=True)
         self.periodic_thread.start()
         self.deadline = deadline
@@ -164,6 +166,11 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             return response
         # If there is no response ready, process the request and create a response
         request_id = self.get_request_id(context)
+        if self.drop == "1":
+                print(f"\n\n\nSIMULATED ARRIVAL PACKET LOSS {request_id}.")
+                self.drop = False
+                time.sleep(4)
+                
         with self.condition:
             while self.locked:
                 print(f"Client {request.client_id} waiting for lock.")
@@ -174,6 +181,10 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             response = lock_pb2.Response(status=lock_pb2.Status.SUCCESS,id_num=self.lock_counter)
             self.update_cache(request_id, response)
             print(f"Lock granted to client {request.client_id}")
+            if self.drop == "2":
+                print(f"\n\n\nSIMULATED RETURN PACKET LOSS {request_id}.")
+                self.drop = False
+                time.sleep(4)
             return response
         
     def lock_release(self, request, context):
@@ -210,7 +221,12 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             return response
         # If there is no response ready, process the request and create a response
         request_id = self.get_request_id(context)
-        if self.lock_owner == None or self.lock_owner != request.client_id or self.lock_counter != request.lock_val:
+        if self.lock_counter != request.lock_val or self.lock_owner == None:
+            response = lock_pb2.Response(status=lock_pb2.Status.LOCK_EXPIRED)
+            self.update_cache(request_id, response)
+            print(f"Client {request.client_id} has an expired lock")
+            return response
+        if  self.lock_owner != request.client_id:
             response = lock_pb2.Response(status=lock_pb2.Status.LOCK_NOT_ACQUIRED)
             self.update_cache(request_id, response)
             print(f"Client {request.client_id} does not have access to lock")
@@ -228,8 +244,22 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         return response
     
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="LockClient operations")
+    parser.add_argument(
+        "-d", "--drop",
+        type=int,
+        choices=[1, 2],  # Limit acceptable values to 1 or 2
+        help="Drop packet on lock acquire: 1=lost on the way there, 2=lost on the way back"
+    )
+    args = parser.parse_args()
+
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=100))
-    lock_pb2_grpc.add_LockServiceServicer_to_server(LockService(), server)
+    if args.drop==1:
+        lock_pb2_grpc.add_LockServiceServicer_to_server(LockService(drop="1"), server)
+    elif args.drop==2:
+        lock_pb2_grpc.add_LockServiceServicer_to_server(LockService(drop="2"), server)
+    else:
+        lock_pb2_grpc.add_LockServiceServicer_to_server(LockService(drop=False), server)
     server.add_insecure_port(port)
     server.start()
     print("Server started (localhost) on port 56751.")
