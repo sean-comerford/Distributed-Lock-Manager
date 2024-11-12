@@ -73,7 +73,6 @@ class LockClient:
         else:
             print("LOCK NOT OWNED")
 
-        print(response)
 
     def RPC_close(self):
         request = lock_pb2.Int(rc=self.client_id)
