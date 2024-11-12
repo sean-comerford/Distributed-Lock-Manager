@@ -49,6 +49,7 @@ class LockClient:
             response = self.stub.lock_acquire(request)
             if response.status == lock_pb2.Status.SUCCESS:
                 print(f"Lock acquired")
+                self.lock_val = response.id_num
         else:
             print("LOCK ALREADY OWNED")
 
