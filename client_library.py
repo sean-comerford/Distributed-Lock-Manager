@@ -17,6 +17,7 @@ class LockClient:
         # Create stub
         self.stub = lock_pb2_grpc.LockServiceStub(self.channel)
         self.client_id = None
+        self.lock_val = None
     
     def retries(self, max_retries,place,query):
         """
@@ -30,7 +31,7 @@ class LockClient:
                 response = place(query)
                 return response
             except grpc.RpcError as rpc_error:
-                print(f"Call failed with code: {rpc_error.code()}")
+                print(f"Client{self.client_id}:Call failed with code: {rpc_error.code()}")
                 retries += 1
         return False
 
@@ -39,31 +40,48 @@ class LockClient:
         # response = self.retries(max_retries=5,place=self.stub.client_init,query=request)
         response = self.stub.client_init(request)
         self.client_id = response.id_num
-        print(f"Successfully connected to server with client ID: {self.client_id}")
+        print(f"Client{self.client_id}:Successfully connected to server with client ID: {self.client_id}")
             
     def RPC_lock_acquire(self):
-        request = lock_pb2.lock_args(client_id=self.client_id)
-        print(f"Waiting for lock...")
-        response = self.stub.lock_acquire(request)
-        if response.status == lock_pb2.Status.SUCCESS:
-            print(f"Lock acquired")
+        if self.lock_val == None:
+            request = lock_pb2.lock_args(client_id=self.client_id)
+            print(f"Client{self.client_id}:Waiting for lock...")
+            response = self.stub.lock_acquire(request)
+            if response.status == lock_pb2.Status.SUCCESS:
+                print(f"Client{self.client_id}:Lock acquired")
+                self.lock_val = response.id_num
+        else:
+            print(f"Client{self.client_id}:LOCK ALREADY OWNED")
 
     def RPC_lock_release(self):
-        print(f"Attempting to release lock with client ID: {self.client_id}")
-        request = lock_pb2.lock_args(client_id=self.client_id)
+        print(f"Client{self.client_id}: Attempting to release lock with client ID: {self.client_id}")
+        request = lock_pb2.lock_args(client_id=self.client_id,lock_val=self.lock_val)
         response = self.stub.lock_release(request)
-        print(f"Lock released")
+        if response.status == lock_pb2.Status.SUCCESS:
+            print(f"Client{self.client_id}:Lock released")
+        else:
+            print(f"Client{self.client_id}:DID NOT OWN LOCK - reset lock_val")
+        self.lock_val = None
 
-    def RPC_append_file(self, file, content):
-        request = lock_pb2.file_args(filename = file , content = bytes(content, 'utf-8'), client_id=self.client_id) # Specify content to append
-        response = self.stub.file_append(request)
+    def RPC_append_file(self, file, content,test=False):
+        if(self.lock_val is not None):
+            request = lock_pb2.file_args(filename = file , content = bytes(content, 'utf-8'), client_id=self.client_id,lock_val=self.lock_val) # Specify content to append
+            response = self.stub.file_append(request)
+            if response.status == lock_pb2.Status.LOCK_NOT_ACQUIRED:
+                print(f"Client{self.client_id}: DID NOT OWN LOCK - reset lock_val")
+                self.lock_val = None
+            if test:
+                return response.status
+        else:
+            print(f"Client{self.client_id}:  ERROR: LOCK_EXPIRED")
+
 
     def RPC_close(self):
         request = lock_pb2.Int(rc=self.client_id)
         response = self.stub.client_close(request)
         # Explicitly closing the gRPC channel.
         self.channel.close()
-        print("Client connection closed.")
+        print(f"Client{self.client_id}:Client connection closed.")
 
 # Interactive command loop for testing and debugging
 def command_loop(client):
