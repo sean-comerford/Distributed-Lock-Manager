@@ -168,8 +168,9 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         request_id = self.get_request_id(context)
         if self.drop == True:
                 print(f"\n\n\nSIMULATED PACKET LOSS {request_id}.")
-                time.sleep(4)
                 self.drop = False
+                time.sleep(4)
+                
         with self.condition:
             while self.locked:
                 print(f"Client {request.client_id} waiting for lock.")
