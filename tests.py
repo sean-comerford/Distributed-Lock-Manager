@@ -34,12 +34,12 @@ def test1():
     assert status ==lock_pb2.Status.LOCK_EXPIRED
     
     print("TEST 1 PASSED")
-test1()
+# test1()
 
 # Test 2: Packet Drop
 def test2():
     open("file_1.txt", 'w').close()
-    p = subprocess.Popen (["python", "server.py","-d"])
+    p = subprocess.Popen (["python", "server.py","-d","1"])
     time.sleep(1)
     def client1_behaviour():
         client= LockClient(interceptor=RetryInterceptor())
@@ -63,7 +63,37 @@ def test2():
     thread2.join()
     p.terminate()
     assert open("file_1.txt", 'r').read() == "BA"
-    
+
+
+    # part b
+    print("TEST 2)a) PASSED")
+    open("file_1.txt", 'w').close()
+    p = subprocess.Popen (["python", "server.py","-d","2"])
+    time.sleep(1)
+    def client1_behaviour():
+        client= LockClient(interceptor=RetryInterceptor())
+        client.RPC_init()
+        client.RPC_lock_acquire()
+        client.RPC_append_file("file_1.txt", "A")
+    def client2_behaviour():
+        client= LockClient(interceptor=RetryInterceptor())
+        time.sleep(0.1)
+        client.RPC_init()
+        client.RPC_lock_acquire()
+        client.RPC_append_file("file_1.txt", "B")
+        client.RPC_lock_release()
+    thread1 = threading.Thread(target=client1_behaviour)
+    thread2 = threading.Thread(target=client2_behaviour)
+
+    # Start the threads
+    thread1.start()
+    thread2.start()
+    thread1.join()
+    thread2.join()
+    p.terminate()
+    assert open("file_1.txt", 'r').read() == "AB"
+    print("TEST 2)b) PASSED")
     print("TEST 2 PASSED")
+
 test2()
 

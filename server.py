@@ -166,8 +166,8 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             return response
         # If there is no response ready, process the request and create a response
         request_id = self.get_request_id(context)
-        if self.drop == True:
-                print(f"\n\n\nSIMULATED PACKET LOSS {request_id}.")
+        if self.drop == "1":
+                print(f"\n\n\nSIMULATED ARRIVAL PACKET LOSS {request_id}.")
                 self.drop = False
                 time.sleep(4)
                 
@@ -181,6 +181,10 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             response = lock_pb2.Response(status=lock_pb2.Status.SUCCESS,id_num=self.lock_counter)
             self.update_cache(request_id, response)
             print(f"Lock granted to client {request.client_id}")
+            if self.drop == "2":
+                print(f"\n\n\nSIMULATED RETURN PACKET LOSS {request_id}.")
+                self.drop = False
+                time.sleep(4)
             return response
         
     def lock_release(self, request, context):
@@ -241,12 +245,19 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="LockClient operations")
-    parser.add_argument("-d", "--drop", action="store_true", help="Drop packet from initial acquire")
+    parser.add_argument(
+        "-d", "--drop",
+        type=int,
+        choices=[1, 2],  # Limit acceptable values to 1 or 2
+        help="Drop packet on lock acquire: 1=lost on the way there, 2=lost on the way back"
+    )
     args = parser.parse_args()
 
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=100))
-    if args.drop:
-        lock_pb2_grpc.add_LockServiceServicer_to_server(LockService(drop=True), server)
+    if args.drop==1:
+        lock_pb2_grpc.add_LockServiceServicer_to_server(LockService(drop="1"), server)
+    elif args.drop==2:
+        lock_pb2_grpc.add_LockServiceServicer_to_server(LockService(drop="2"), server)
     else:
         lock_pb2_grpc.add_LockServiceServicer_to_server(LockService(drop=False), server)
     server.add_insecure_port(port)
