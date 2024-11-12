@@ -217,7 +217,12 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             return response
         # If there is no response ready, process the request and create a response
         request_id = self.get_request_id(context)
-        if self.lock_owner == None or self.lock_owner != request.client_id or self.lock_counter != request.lock_val:
+        if self.lock_counter != request.lock_val or self.lock_owner == None:
+            response = lock_pb2.Response(status=lock_pb2.Status.LOCK_EXPIRED)
+            self.update_cache(request_id, response)
+            print(f"Client {request.client_id} has an expired lock")
+            return response
+        if  self.lock_owner != request.client_id:
             response = lock_pb2.Response(status=lock_pb2.Status.LOCK_NOT_ACQUIRED)
             self.update_cache(request_id, response)
             print(f"Client {request.client_id} does not have access to lock")

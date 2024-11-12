@@ -63,13 +63,15 @@ class LockClient:
             print(f"Client{self.client_id}:DID NOT OWN LOCK - reset lock_val")
         self.lock_val = None
 
-    def RPC_append_file(self, file, content):
+    def RPC_append_file(self, file, content,test=False):
         if(self.lock_val is not None):
             request = lock_pb2.file_args(filename = file , content = bytes(content, 'utf-8'), client_id=self.client_id,lock_val=self.lock_val) # Specify content to append
             response = self.stub.file_append(request)
             if response.status == lock_pb2.Status.LOCK_NOT_ACQUIRED:
                 print(f"Client{self.client_id}: DID NOT OWN LOCK - reset lock_val")
                 self.lock_val = None
+            if test:
+                return response.status
         else:
             print(f"Client{self.client_id}:  ERROR: LOCK_EXPIRED")
 

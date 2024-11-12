@@ -7,33 +7,38 @@ import subprocess
 import threading
 import os
 import signal
-
+import lock_pb2
 
 
 
 # Test 1 Packet Delay
 
 def test1():
+    open("file_1.txt", 'w').close()
     p = subprocess.Popen(["python", "server.py",])
     time.sleep(1)
     client= LockClient(interceptor=RetryInterceptor())
     client2 = LockClient(interceptor=RetryInterceptor())
-    capturedOutput = StringIO()         # Make StringIO.
-    sys.stdout = capturedOutput                  # Redirect stdout.
+    capturedOutput = StringIO()
+    sys.stdout = capturedOutput                  
     client.RPC_init()
     client2.RPC_init()
     client.RPC_lock_acquire()
-    client2.RPC_lock_acquire()
+    client2.RPC_lock_acquire(   )
     time.sleep(3)
-    client.RPC_append_file("A.txt", "Hello")                                # Call function.
-    sys.stdout = sys.__stdout__                  # Reset redirect.
-    print('Captured', capturedOutput.getvalue())  # Now works.
-    print(capturedOutput.getvalue()[-100:])
-    p.terminate()
-# test1()
+    status = client.RPC_append_file("A.txt", "Hello",test=True)                          
+    sys.stdout = sys.__stdout__       
+    p.terminate()           
+    assert open("file_1.txt", 'r').read() == ""
+    print(status)
+    assert status ==lock_pb2.Status.LOCK_EXPIRED
+    
+    print("TEST 1 PASSED")
+test1()
 
 # Test 2: Packet Drop
 def test2():
+    open("file_1.txt", 'w').close()
     p = subprocess.Popen (["python", "server.py","-d"])
     time.sleep(1)
     def client1_behaviour():
@@ -56,8 +61,9 @@ def test2():
     thread2.start()
     thread1.join()
     thread2.join()
-    
-    
-    
     p.terminate()
+    assert open("file_1.txt", 'r').read() == "BA"
+    
+    print("TEST 2 PASSED")
 test2()
+
