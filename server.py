@@ -34,6 +34,8 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         self.deadline = deadline
         self.start_cache_clear_thread()
 
+        self.testing_counter = 0
+
     def _execute_periodically(self):
         """Executes the periodic task every `self.deadline` seconds.
         this thread checks that if a lock owner has been set
@@ -166,10 +168,10 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             return response
         # If there is no response ready, process the request and create a response
         request_id = self.get_request_id(context)
-        if self.drop == "1":
+        if self.drop == 1:
                 print(f"\n\n\nSIMULATED ARRIVAL PACKET LOSS {request_id}.")
                 self.drop = False
-                time.sleep(4)
+                time.sleep(2.1)
                 
         with self.condition:
             while self.locked:
@@ -181,10 +183,10 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             response = lock_pb2.Response(status=lock_pb2.Status.SUCCESS,id_num=self.lock_counter)
             self.update_cache(request_id, response)
             print(f"Lock granted to client {request.client_id}")
-            if self.drop == "2":
+            if self.drop == 2:
                 print(f"\n\n\nSIMULATED RETURN PACKET LOSS {request_id}.")
                 self.drop = False
-                time.sleep(4)
+                time.sleep(2.1)
             return response
         
     def lock_release(self, request, context):
@@ -194,6 +196,10 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             return response
         # If there is no response ready, process the request and create a response
         request_id = self.get_request_id(context)
+        if self.drop == 3:
+                print(f"\n\n\nSIMULATED PACKET DELAY {request_id}.")
+                self.drop = False
+                time.sleep(2.1)
         with self.condition:
             if self.locked and self.lock_owner == request.client_id and self.lock_counter == request.lock_val:
                 self.locked = False
@@ -221,6 +227,15 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             return response
         # If there is no response ready, process the request and create a response
         request_id = self.get_request_id(context)
+        self.testing_counter += 1
+        if (self.drop == 4 and self.testing_counter==1) or self.drop == 5:
+                print(f"\n\n\nSIMULATED PACKET ARRIVAL LOST {request_id}.")
+                # self.drop = False
+                if self.drop == 5:
+                    time.sleep(8)
+                    self.drop = False
+                else:
+                    time.sleep(2.1)
         if self.lock_counter != request.lock_val or self.lock_owner == None:
             response = lock_pb2.Response(status=lock_pb2.Status.LOCK_EXPIRED)
             self.update_cache(request_id, response)
@@ -241,6 +256,10 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         response = lock_pb2.Response(status=lock_pb2.Status.SUCCESS)
         self.update_cache(request_id, response)
         print(f"Client {request.client_id} appended to file {request.filename}")
+        if self.drop == 4 and self.testing_counter==2:
+                print(f"\n\n\nSIMULATED PACKET RESPONSE LOST {request_id}.")
+                self.drop = False
+                time.sleep(2.1)
         return response
     
 if __name__ == "__main__":
@@ -248,16 +267,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "-d", "--drop",
         type=int,
-        choices=[1, 2],  # Limit acceptable values to 1 or 2
+        choices=[1, 2, 3, 4, 5],  # Limit acceptable values
         help="Drop packet on lock acquire: 1=lost on the way there, 2=lost on the way back"
     )
     args = parser.parse_args()
 
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=100))
-    if args.drop==1:
-        lock_pb2_grpc.add_LockServiceServicer_to_server(LockService(drop="1"), server)
-    elif args.drop==2:
-        lock_pb2_grpc.add_LockServiceServicer_to_server(LockService(drop="2"), server)
+    if args.drop:
+        lock_pb2_grpc.add_LockServiceServicer_to_server(LockService(drop=args.drop), server)
     else:
         lock_pb2_grpc.add_LockServiceServicer_to_server(LockService(drop=False), server)
     server.add_insecure_port(port)
