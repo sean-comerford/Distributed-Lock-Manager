@@ -25,7 +25,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
     def __init__(self,deadline=8,drop=False,load=False):
         if(load):
             self.logger = Logger()
-            self.load_server_state_from_log(drop=False, deadline=8)
+            self.load_server_state_from_log( deadline=8)
         else:
             self.locked = False #Is Lock locked?
             self.lock = threading.Lock() #Mutual Exclusion on shared resources (self.locked, client_counter and lock_owner)
@@ -38,7 +38,6 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             self.cache_lock = threading.Lock()
             self.logger = Logger()
             self.lock_counter = 0
-            self.drop = drop
             self.periodic_thread = threading.Thread(target=self._execute_periodically, daemon=True)
             self.periodic_thread.start()
             self.log_queue = queue.Queue()
@@ -293,12 +292,6 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="LockClient operations")
     parser.add_argument(
-        "-d", "--drop",
-        type=int,
-        choices=[1, 2],  # Limit acceptable values to 1 or 2
-        help="Drop packet on lock acquire: 1=lost on the way there, 2=lost on the way back"
-    )
-    parser.add_argument(
         "-l", "--load",
     )
     args = parser.parse_args()
@@ -308,12 +301,6 @@ if __name__ == "__main__":
     else:
         load = False
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=100))
-    if args.drop==1:
-        lock_pb2_grpc.add_LockServiceServicer_to_server(LockService(drop="1",load=load), server)
-    elif args.drop==2:
-        lock_pb2_grpc.add_LockServiceServicer_to_server(LockService(drop="2",load=load), server)
-    else:
-        lock_pb2_grpc.add_LockServiceServicer_to_server(LockService(drop=False,load=load), server)
     server.add_insecure_port(port)
     server.start()
     print("Server started (localhost) on port 56751.")
