@@ -9,6 +9,9 @@ import asyncio
 import logging
 from collections import OrderedDict
 import argparse
+from logger import Logger
+import queue
+import sys
 from datetime import datetime, timedelta
 
 timeout = 100
@@ -18,23 +21,45 @@ port = '127.0.0.1:56751'
 
 class LockService(lock_pb2_grpc.LockServiceServicer):
 
-    def __init__(self,deadline=8,drop=False):
-        self.locked = False #Is Lock locked?
-        self.lock = threading.Lock() #Mutual Exclusion on shared resources (self.locked, client_counter and lock_owner)
-        self.condition = threading.Condition(self.lock) #Coordinate access to the lock by allowing threads (clients) to wait until lock availabel
-        self.client_counter = 0
-        self.lock_owner = None
-        self.files = {f'file_{i}.txt': [] for i in range(100)} #Change to however we want out files to look
-        # Cache to store the processed requests and their responses
-        self.response_cache = OrderedDict()
-        self.cache_lock = threading.Lock()
-        self.lock_counter = 0
-        self.drop = drop
-        self.periodic_thread = threading.Thread(target=self._execute_periodically, daemon=True)
-        self.periodic_thread.start()
-        self.last_action_time = None
-        self.deadline = timedelta(seconds=deadline)
-        self.start_cache_clear_thread()
+
+    def __init__(self,deadline=8,drop=False,load=False):
+        if(load):
+            self.logger = Logger()
+            self.load_server_state_from_log(drop=False, deadline=8)
+        else:
+            self.locked = False #Is Lock locked?
+            self.lock = threading.Lock() #Mutual Exclusion on shared resources (self.locked, client_counter and lock_owner)
+            self.condition = threading.Condition(self.lock) #Coordinate access to the lock by allowing threads (clients) to wait until lock availabel
+            self.client_counter = 0
+            self.lock_owner = None
+            self.files = {f'file_{i}.txt': [] for i in range(100)} #Change to however we want out files to look
+            # Cache to store the processed requests and their responses
+            self.response_cache = OrderedDict()
+            self.cache_lock = threading.Lock()
+            self.logger = Logger()
+            self.lock_counter = 0
+            self.drop = drop
+            self.periodic_thread = threading.Thread(target=self._execute_periodically, daemon=True)
+            self.periodic_thread.start()
+            self.log_queue = queue.Queue()
+            self.logging_thread = threading.Thread(target=self.log_processor, daemon=True)
+            self.logging_thread.start()
+            self.last_action_time = None
+            self.deadline = timedelta(seconds=deadline)
+            self.start_cache_clear_thread()
+
+    def log_processor(self):
+        while True:
+            log_data = self.log_queue.get()
+            try:
+                self.logger.save_log(*log_data)
+                print("Logged state:" )
+            except Exception as e:
+                print(f"Error logging state: {e}")
+            self.log_queue.task_done()
+
+    def log_state(self):
+        self.log_queue.put((self.lock_owner, self.lock_counter, self.response_cache, self.client_counter, self.locked))
 
     def _execute_periodically(self):
         """Executes the periodic task every `self.deadline` seconds.
@@ -64,7 +89,6 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
                 time.sleep(1800)
                 self.clear_oldest_half_of_cache()
                 print(f"Oldest half of cache cleared")
-        
         thread = threading.Thread(target=clear_cache, daemon=True)
         thread.start()
 
@@ -100,7 +124,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
     def print_metadata(self, context):
         '''Helper method to print metadata from client'''
         metadata_str = ", ".join(f"{key}={value}" for key, value in context.invocation_metadata())
-        print(f"Received initial metadata from client: {metadata_str}")
+        #print(f"Received initial metadata from client: {metadata_str}")
 
 
     def process_request(self, context):
@@ -124,6 +148,24 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         print(f"No cache response found for request {request_id}. Processing request")
         self.initialise_cache(request_id)
         return None
+
+    def load_server_state_from_log(self, drop=False, deadline=8):
+        print("Server Loading from logs")
+        self.lock_owner, self.lock_counter, self.response_cache, self.client_counter, self.locked = self.logger.load_log()
+        self.lock = threading.Lock()
+        self.condition = threading.Condition(self.lock)
+        self.files = {f'file_{i}.txt': [] for i in range(100)}
+        self.response_cache = OrderedDict()
+        self.cache_lock = threading.Lock()
+        self.logger = Logger()
+        self.drop = drop
+        self.periodic_thread = threading.Thread(target=self._execute_periodically, daemon=True)
+        self.periodic_thread.start()
+        self.log_queue = queue.Queue()
+        self.logging_thread = threading.Thread(target=self.log_processor, daemon=True)
+        self.logging_thread.start()
+        self.deadline = deadline
+        self.start_cache_clear_thread()
 
 
     def client_init(self, request, context):
@@ -186,6 +228,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             self.last_action_time = datetime.now()
             response = lock_pb2.Response(status=lock_pb2.Status.SUCCESS,id_num=self.lock_counter)
             self.update_cache(request_id, response)
+            self.log_state()
             print(f"Lock granted to client {request.client_id}")
             if self.drop == "2":
                 print(f"\n\n\nSIMULATED RETURN PACKET LOSS {request_id}.")
@@ -208,6 +251,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
                 self.condition.notify_all()
                 response = lock_pb2.Response(status=lock_pb2.Status.SUCCESS)
                 self.update_cache(request_id, response)
+                self.log_state()
                 print(f"Lock released by client {request.client_id}")
                 return response
             elif not self.locked:
@@ -259,15 +303,22 @@ if __name__ == "__main__":
         choices=[1, 2],  # Limit acceptable values to 1 or 2
         help="Drop packet on lock acquire: 1=lost on the way there, 2=lost on the way back"
     )
+    parser.add_argument(
+        "-l", "--load",
+    )
     args = parser.parse_args()
-
+    
+    if args.load == "1":
+        load = True
+    else:
+        load = False
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=100))
     if args.drop==1:
-        lock_pb2_grpc.add_LockServiceServicer_to_server(LockService(drop="1"), server)
+        lock_pb2_grpc.add_LockServiceServicer_to_server(LockService(drop="1",load=load), server)
     elif args.drop==2:
-        lock_pb2_grpc.add_LockServiceServicer_to_server(LockService(drop="2"), server)
+        lock_pb2_grpc.add_LockServiceServicer_to_server(LockService(drop="2",load=load), server)
     else:
-        lock_pb2_grpc.add_LockServiceServicer_to_server(LockService(drop=False), server)
+        lock_pb2_grpc.add_LockServiceServicer_to_server(LockService(drop=False,load=load), server)
     server.add_insecure_port(port)
     server.start()
     print("Server started (localhost) on port 56751.")
