@@ -73,11 +73,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
                 # Check how long has elapsed since the last action
                 time_elapsed = datetime.now() - self.last_action_time 
                 if time_elapsed > self.deadline:
-                    with self.lock:
-                        self.locked = False
-                        self.lock_owner = None
-                        self.last_action_time = None
-                        self.condition.notify_all()
+                    self._lock_release()
                     print("LOCK OWNER OVER DEADLINE, REMOVING LOCK")
             # Check every second if the lock owner has been over the deadline
             time.sleep(1)
@@ -236,6 +232,15 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
                 time.sleep(4)
             return response
         
+    def _lock_release(self,):
+        # if critical section not finished drop it
+        # check change to files and queues complete
+        with self.condition:
+            self.locked = False
+            self.lock_owner = None
+            self.last_action_time = None
+            self.condition.notify_all()
+        
     def lock_release(self, request, context):
         # Process request
         response = self.process_request(context)
@@ -243,27 +248,23 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             return response
         # If there is no response ready, process the request and create a response
         request_id = self.get_request_id(context)
-        with self.condition:
-            if self.locked and self.lock_owner == request.client_id and self.lock_counter == request.lock_val:
-                self.locked = False
-                self.lock_owner = None
-                self.last_action_time = None
-                self.condition.notify_all()
-                response = lock_pb2.Response(status=lock_pb2.Status.SUCCESS)
-                self.update_cache(request_id, response)
-                self.log_state()
-                print(f"Lock released by client {request.client_id}")
-                return response
-            elif not self.locked:
-                response = lock_pb2.Response(status=lock_pb2.Status.FILE_ERROR)
-                self.update_cache(request_id, response)
-                print(f"Client {request.client_id} attempted to release a lock that was not acquired.")
-                return response #Not a file error but all we have in proto?
-            else:
-                response = lock_pb2.Response(status=lock_pb2.Status.FILE_ERROR)
-                self.update_cache(request_id, response)
-                print(f"Client {request.client_id} attempted to release a lock owned by client {self.lock_owner}.")
-                return response #Again Not file error
+        if self.locked and self.lock_owner == request.client_id and self.lock_counter == request.lock_val:
+            self._lock_release()
+            response = lock_pb2.Response(status=lock_pb2.Status.SUCCESS)
+            self.update_cache(request_id, response)
+            self.log_state()
+            print(f"Lock released by client {request.client_id}")
+            return response
+        elif not self.locked:
+            response = lock_pb2.Response(status=lock_pb2.Status.FILE_ERROR)
+            self.update_cache(request_id, response)
+            print(f"Client {request.client_id} attempted to release a lock that was not acquired.")
+            return response #Not a file error but all we have in proto?
+        else:
+            response = lock_pb2.Response(status=lock_pb2.Status.FILE_ERROR)
+            self.update_cache(request_id, response)
+            print(f"Client {request.client_id} attempted to release a lock owned by client {self.lock_owner}.")
+            return response #Again Not file error
     
     def file_append(self, request, context):
         # Process request
