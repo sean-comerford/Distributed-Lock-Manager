@@ -49,7 +49,6 @@ class LockClient:
         if response.status == lock_pb2.Status.SUCCESS:
             print(f"Client{self.client_id}:Lock acquired")
             self.lock_val = response.id_num
-
     def RPC_lock_release(self):
         print(f"Client{self.client_id}: Attempting to release lock with client ID: {self.client_id}")
         request = lock_pb2.lock_args(client_id=self.client_id,lock_val=self.lock_val)
