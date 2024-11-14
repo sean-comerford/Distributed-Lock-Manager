@@ -337,8 +337,5 @@ testC()
 testD()
 test2a()
 test2b()
-<<<<<<< HEAD
 testLog()
 testLog2()
-=======
->>>>>>> c92b85c03f594b3cc6fe474a915b5a0930cf0514
