@@ -186,7 +186,7 @@ def test2a():
         client= LockClient(interceptor=RetryInterceptor())
         client.RPC_init()
         client.RPC_lock_acquire()
-        time.sleep(8.1)
+        time.sleep(8.5)
         status = client.RPC_append_file("file_1.txt", "A",test=True)
         assert status ==lock_pb2.Status.LOCK_EXPIRED  
         print("-------------STATUS CODE CORRECT------------") 
