@@ -12,7 +12,7 @@ import argparse
 from logger import Logger
 import queue
 import sys
-
+from datetime import datetime, timedelta
 
 timeout = 100
 port = '127.0.0.1:56751'
@@ -20,6 +20,7 @@ port = '127.0.0.1:56751'
 
 
 class LockService(lock_pb2_grpc.LockServiceServicer):
+
 
     def __init__(self,deadline=8,drop=False,load=False):
         if(load):
@@ -43,7 +44,8 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             self.log_queue = queue.Queue()
             self.logging_thread = threading.Thread(target=self.log_processor, daemon=True)
             self.logging_thread.start()
-            self.deadline = deadline
+            self.last_action_time = None
+            self.deadline = timedelta(seconds=deadline)
             self.start_cache_clear_thread()
 
     def log_processor(self):
@@ -67,15 +69,18 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         
         """
         while True:
-            if self.lock_owner is not None:
-                cur_lock_owner = self.lock_owner
-                time.sleep(self.deadline)
-                if cur_lock_owner == self.lock_owner:
+            if self.lock_owner is not None and self.last_action_time is not None:
+                # Check how long has elapsed since the last action
+                time_elapsed = datetime.now() - self.last_action_time 
+                if time_elapsed > self.deadline:
                     with self.lock:
                         self.locked = False
                         self.lock_owner = None
+                        self.last_action_time = None
                         self.condition.notify_all()
-                    print("LOCK OWNER OVER DEADLINE REMOVING LOCK")
+                    print("LOCK OWNER OVER DEADLINE, REMOVING LOCK")
+            # Check every second if the lock owner has been over the deadline
+            time.sleep(1)
 
     def start_cache_clear_thread(self):
         '''Start a thread to clear the oldest requests from the cache every 30 minutes'''
@@ -220,6 +225,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             self.locked = True
             self.lock_owner = request.client_id
             self.lock_counter += 1
+            self.last_action_time = datetime.now()
             response = lock_pb2.Response(status=lock_pb2.Status.SUCCESS,id_num=self.lock_counter)
             self.update_cache(request_id, response)
             self.log_state()
@@ -241,6 +247,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             if self.locked and self.lock_owner == request.client_id and self.lock_counter == request.lock_val:
                 self.locked = False
                 self.lock_owner = None
+                self.last_action_time = None
                 self.condition.notify_all()
                 response = lock_pb2.Response(status=lock_pb2.Status.SUCCESS)
                 self.update_cache(request_id, response)
@@ -283,6 +290,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         with open(request.filename, 'ab') as file:
             file.write(request.content)
         response = lock_pb2.Response(status=lock_pb2.Status.SUCCESS)
+        self.last_action_time = datetime.now()
         self.update_cache(request_id, response)
         print(f"Client {request.client_id} appended to file {request.filename}")
         return response
