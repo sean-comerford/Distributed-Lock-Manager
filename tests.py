@@ -15,7 +15,7 @@ import lock_pb2
 
 def testA():
     open("file_1.txt", 'w').close()
-    p = subprocess.Popen(["python", "server.py","-d","5"])
+    p = subprocess.Popen(["python", "testserver.py","-d","5"])
     time.sleep(1)
     def client1_behaviour():
         client= LockClient(interceptor=RetryInterceptor())
@@ -50,7 +50,7 @@ def testA():
 # Test B: Packet Drop
 def testB():
     open("file_1.txt", 'w').close()
-    p = subprocess.Popen (["python", "server.py","-d","1"])
+    p = subprocess.Popen (["python", "testserver.py","-d","1"])
     time.sleep(1)
     def client1_behaviour():
         client= LockClient(interceptor=RetryInterceptor())
@@ -79,13 +79,14 @@ def testB():
     # part b
     print("TEST b)a) PASSED")
     open("file_1.txt", 'w').close()
-    p = subprocess.Popen (["python", "server.py","-d","2"])
+    p = subprocess.Popen (["python", "testserver.py","-d","2"])
     time.sleep(1)
     def client1_behaviour():
         client= LockClient(interceptor=RetryInterceptor())
         client.RPC_init()
         client.RPC_lock_acquire()
         client.RPC_append_file("file_1.txt", "A")
+        client.RPC_lock_release()
     def client2_behaviour():
         client= LockClient(interceptor=RetryInterceptor())
         time.sleep(0.1)
@@ -110,7 +111,7 @@ def testB():
 #Test C Duplicated Requests:
 def testC():
     open("file_1.txt", 'w').close()
-    p = subprocess.Popen (["python", "server.py","-d","3"])
+    p = subprocess.Popen (["python", "testserver.py","-d","3"])
     time.sleep(1)
     def client1_behaviour():
         client= LockClient(interceptor=RetryInterceptor())
@@ -146,7 +147,7 @@ def testC():
 #Test D Combined network failures:
 def testD():
     open("file_1.txt", 'w').close()
-    p = subprocess.Popen (["python", "server.py","-d","4"])
+    p = subprocess.Popen (["python", "testserver.py","-d","4"])
     time.sleep(1)
     def client1_behaviour():
         client= LockClient(interceptor=RetryInterceptor())
@@ -179,7 +180,7 @@ def testD():
 # Part 2: Client Fails/Stucks
 def test2a():
     open("file_1.txt", 'w').close()
-    p = subprocess.Popen (["python", "server.py"])
+    p = subprocess.Popen (["python", "testserver.py"])
     time.sleep(1)
     def client1_behaviour():
         client= LockClient(interceptor=RetryInterceptor())
@@ -220,7 +221,7 @@ def test2a():
 # Part 2b: Stucks after editing the file
 def test2b():
     open("file_1.txt", 'w').close()
-    p = subprocess.Popen (["python", "server.py"])
+    p = subprocess.Popen (["python", "testserver.py"])
     time.sleep(1)
     def client1_behaviour():
         client= LockClient(interceptor=RetryInterceptor())
