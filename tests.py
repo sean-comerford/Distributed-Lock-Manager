@@ -57,6 +57,7 @@ def testB():
         client.RPC_init()
         client.RPC_lock_acquire()
         client.RPC_append_file("file_1.txt", "A")
+        client.RPC_lock_release()
     def client2_behaviour():
         client= LockClient(interceptor=RetryInterceptor())
         time.sleep(0.1)
@@ -122,6 +123,7 @@ def testC():
         time.sleep(1)
         client.RPC_lock_acquire()
         client.RPC_append_file("file_1.txt", "A")
+        client.RPC_lock_release()
     def client2_behaviour():
         client= LockClient(interceptor=RetryInterceptor())
         time.sleep(0.1)
@@ -193,6 +195,7 @@ def test2a():
         client.RPC_lock_acquire()
         client.RPC_append_file("file_1.txt", "A")
         client.RPC_append_file("file_1.txt", "A")
+        client.RPC_lock_release()
 
         
     def client2_behaviour():
@@ -230,15 +233,20 @@ def test2b():
         
         client.RPC_append_file("file_1.txt", "A")
         time.sleep(8.1)
+        client.RPC_append_file("file_1.txt", "A")
         client.RPC_lock_acquire()
         client.RPC_append_file("file_1.txt", "A")
         client.RPC_append_file("file_1.txt", "A")
+        client.RPC_lock_release()
 
         
     def client2_behaviour():
         client= LockClient(interceptor=RetryInterceptor())
+        # Small pause to make sure this is initialised as client 2
         time.sleep(0.1)
         client.RPC_init()
+        # Small pause to ensure client 1 gets the lock first, as described in test 2b
+        time.sleep(0.1)
         client.RPC_lock_acquire()
         client.RPC_append_file("file_1.txt", "B")
         time.sleep(1)
