@@ -111,6 +111,8 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
                         file.write(content)
                         self.update_cache(append_request_id,(filename,content))
                         print(f"Appended {content} to file {filename}")
+                self.log_state()
+
                     
         
         except Exception as e:
@@ -322,7 +324,6 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             print(self.response_cache)
             for append_request_id, response in self.cs_cache.items():
                 self.update_cache(append_request_id, response)
-            print(self.response_cache)
             self.log_state()
             self.RPC_sendBytes()
             self.cs_cache.clear()
