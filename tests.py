@@ -339,11 +339,11 @@ def testLog2():
 
 
 
-#testA()
-#testB()
-#testC()
-#testD()
-#test2a()
-#test2b()
+testA()
+testB()
+testC()
+testD()
+test2a()
+test2b()
 testLog()
-#testLog2()
+testLog2()
