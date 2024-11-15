@@ -109,6 +109,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
                 for append_request_id, (filename, content) in cs.items():
                     with open(self.folderpath+"/"+filename, 'ab') as file:
                         file.write(content)
+                        self.update_cache(append_request_id,(filename,content))
                         print(f"Appended {content} to file {filename}")
                     
         
