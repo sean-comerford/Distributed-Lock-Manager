@@ -10,7 +10,14 @@ import lock_pb2_grpc
 timeout = 100
 port = '127.0.0.1:56751'
 
+
 class LockServiceWrapper:
+    def get_request_id(self, context):
+        '''Helper method to get request ID from client'''
+        for key, value in context.invocation_metadata():
+            if key == "request-id":
+                return value
+        
     def __init__(self, drop=False):
         # Initialize the actual LockService instance with the provided arguments
         self.drop = drop
@@ -47,18 +54,19 @@ class LockServiceWrapper:
         return self._lock_service.lock_release(request, context)
 
     def file_append(self, request, context):
-        print(f"Wrapper: file_append called by client {request.client_id}")
+        request_id = self.get_request_id(context)
+        print(f"Wrapper: file_append called by client {request.client_id} to append {request.content} with request_id {request_id}")
         if self.drop == 5:
                     time.sleep(8.1)
                     self.drop = False
         self.testing_counter += 1
-        if (self.drop == 4 and self.testing_counter==1):
+        if (self.drop == 4 and self.testing_counter==2):
                 print(f"\n\n\nSIMULATED PACKET ARRIVAL LOST. Append {request.content} for client {request.client_id}.")
                 # self.drop = False
                 time.sleep(12.1)
         response = self._lock_service.file_append(request, context)
-        if self.drop == 4 and self.testing_counter==2:
-                print(f"\n\n\nSIMULATED PACKET RESPONSE LOST {request.client_id}.")
+        if (self.drop == 4 and self.testing_counter==3):
+                print(f"\n\n\nSIMULATED PACKET RESPONSE LOST {request.client_id}. Response is ")
                 self.drop = False
                 time.sleep(12.1)
         return response
