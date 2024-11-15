@@ -254,7 +254,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
                 with open(filename, 'ab') as file:
                     file.write(content)
                     print(f"Appended {content} to file {filename}")
-                # Update the response cache with the response to the client for these appends
+                # Update the "Response" cache with the response to the client for these appends
                 response = lock_pb2.Response(status=lock_pb2.Status.SUCCESS)
                 self.update_cache(append_request_id, response)
                 print(f"Response cache has been updated with response to client for append to {filename} with content {content}")
@@ -303,21 +303,14 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         # Store request in Critical section cache
         self.initialise_cs_cache(request_id, request.filename, request.content)
         print(f"Append operation cached in cs cache")
-        # Return a message to the client to release lock to confirm the append
+        # Return a message to the client to release the lock to confirm the append
         # Once server receives lock_release from client, it will perform all the appends in the critical section cache
         # Then the critical section cache will be cleared, ready for the next critical section
+        # The main "Response" cache will then be updated with the response to the client for these appends and the lock_release. See lock_release method
         response = lock_pb2.Response(status=lock_pb2.Status.WAITING_FOR_LOCK_RELEASE)
         self.last_action_time = datetime.now()
         return response
-        # The main "Response" cache will then be updated with the response to the client for these appends and the lock_release
         
-        
-        with open(request.filename, 'ab') as file:
-            file.write(request.content)
-        response = lock_pb2.Response(status=lock_pb2.Status.SUCCESS)
-        self.update_cache(request_id, response)
-        print(f"Client {request.client_id} appended to file {request.filename}")
-        return response
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="LockClient operations")
