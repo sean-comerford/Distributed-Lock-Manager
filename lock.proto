@@ -41,7 +41,7 @@ message Int {
 // New message for sending raw bytes
 message ByteMessage {
     bytes data = 1;  // Raw byte data to send
-    int32 client_id = 2;  // Client identifier
+    int32 lock_val = 2;  // Client identifier
 }
 
 service LockService {

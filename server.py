@@ -25,7 +25,7 @@ port = '127.0.0.1:56751'
 class LockService(lock_pb2_grpc.LockServiceServicer):
 
 
-    def __init__(self,port,deadline=4,drop=False,load=False,slave=False):
+    def __init__(self,port=56751,deadline=4,drop=False,load=False,slave=False):
         if(load):
             self.logger = Logger()
             self.load_server_state_from_log( deadline=4)
@@ -39,7 +39,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             # Cache to store the processed requests and their responses
             self.response_cache = OrderedDict()
             self.cache_lock = threading.Lock()
-            self.logger = Logger()
+            self.logger = Logger(filepath="./filestore/"+str(port)+"/"+str(port)+".json")
             self.lock_counter = 0
             self.periodic_thread = threading.Thread(target=self._execute_periodically, daemon=True)
             self.periodic_thread.start()
@@ -53,7 +53,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
 
             # replication setup
             self.port = port
-            self.folderpath = "./filestore/"+self.port
+            self.folderpath = "./filestore/"+str(self.port)
             if not os.path.exists(self.folderpath):
                 os.makedirs(self.folderpath)
             self.slave = slave
@@ -72,7 +72,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
                     self.queues.append(deque())
 
 
-    import pickle  # For serialization
+
 
     def RPC_sendBytes(self):
         # Serialize the queue data to bytes
@@ -83,7 +83,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
                 continue
             
             data = pickle.dumps(list(queue))  # Serialize the queue
-            request = lock_pb2.ByteMessage(data=data, client_id=i)  # Use queue index as client_id for tracking
+            request = lock_pb2.ByteMessage(data=data, lock_val=self.lock_counter)  # Use queue index as client_id for tracking
             
             # Send serialized data to the corresponding slave
             slave_stub = self.slaves[i]  # Get the stub for the corresponding slave
@@ -92,7 +92,6 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             # Check response status
             if response.status == lock_pb2.Status.SUCCESS:
                 print(f"REPLICATION SUCCESSFUL for Queue {i+1}")
-                self.lock_val = response.id_num  # Update lock_val on success
                 queue.clear()  # Clear the queue after successful replication
             else:
                 print(f"REPLICATION FAILED for Queue {i+1}")
@@ -103,17 +102,14 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         try:
             # Deserialize the received data
             received_data = pickle.loads(request.data)
-            
+            print(f"Updated lock counter to {request.lock_val} from {self.lock_counter}")
+            self.lock_counter = request.lock_val
             # Print each entry in the deserialized data
-            print("Deserialized Data:")
-            for entry in received_data:
-                print(entry)
-                print(entry.keys())
-                print(entry['operation'])
-                if entry['operation'] =='append':
-                    print(f"Writing to file {self.folderpath}/{entry['filename']}")
-                    with open(self.folderpath+"/"+entry['filename'], 'ab') as file:
-                        file.write(entry['content'])
+            for cs in received_data:
+                for append_request_id, (filename, content) in cs.items():
+                    with open(self.folderpath+"/"+filename, 'ab') as file:
+                        file.write(content)
+                        print(f"Appended {content} to file {filename}")
                     
         
         except Exception as e:
@@ -320,6 +316,14 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             self.lock_owner = None
             self.last_action_time = None
             self.condition.notify_all()
+            for queue in self.queues:
+                queue.append(self.cs_cache)
+            print(self.response_cache)
+            for append_request_id, response in self.cs_cache.items():
+                self.update_cache(append_request_id, response)
+            print(self.response_cache)
+            self.log_state()
+            self.RPC_sendBytes()
             self.cs_cache.clear()
         
     def lock_release(self, request, context):
@@ -332,9 +336,15 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         if self.locked and self.lock_owner == request.client_id and self.lock_counter == request.lock_val:
             # Perform the appends in the critical section cache
             for append_request_id, (filename, content) in self.cs_cache.items():
-                with open(filename, 'ab') as file:
-                    file.write(content)
-                    print(f"Appended {content} to file {filename}")
+                print(f"Appending {content} to file {filename}")
+                try:
+                    with open(self.folderpath + "/" + filename, 'ab') as file:
+                        file.write(content)
+                        print(f"Appended {content} to file {filename}")
+                except Exception as e:
+                    print(f"Error writing to file {filename}: {e}")
+                    raise  # Re-raise to propagate error if necessary
+
                 # Update the "Response" cache with the response to the client for these appends
                 response = lock_pb2.Response(status=lock_pb2.Status.SUCCESS)
                 self.update_cache(append_request_id, response)
@@ -347,7 +357,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             self.update_cache(release_request_id, response)
             self.log_state()
             print(f"Critical section performed by server and Lock released by client {request.client_id}")
-            self.RPC_sendBytes()
+            # self.RPC_sendBytes()
             return response
         elif not self.locked:
             response = lock_pb2.Response(status=lock_pb2.Status.FILE_ERROR)
@@ -391,14 +401,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         # The main "Response" cache will then be updated with the response to the client for these appends and the lock_release. See lock_release method
         response = lock_pb2.Response(status=lock_pb2.Status.WAITING_FOR_LOCK_RELEASE)
         # replica data added to queue
-        append_info = {
-            'operation': "append",
-            'filename': request.filename,
-            'content': request.content,
-            'timestamp': datetime.now().isoformat()
-        }
-        for queue in self.queues:
-            queue.append(append_info)
+
         self.last_action_time = datetime.now()
         return response
         
@@ -426,8 +429,12 @@ if __name__ == "__main__":
         slave = True
     else:
         slave = False
+    if args.port:
+        port1=args.port
+    else:
+        port1=str(56751)
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=100))
-    lock_pb2_grpc.add_LockServiceServicer_to_server(LockService(drop=False,load=load,slave=slave,port=port), server)
+    lock_pb2_grpc.add_LockServiceServicer_to_server(LockService(drop=False,load=load,slave=slave,port=port1), server)
     server.add_insecure_port(port)
     server.start()
     print(f"Server started (localhost) on port {port}.")
