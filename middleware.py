@@ -11,7 +11,8 @@ import lock_pb2
 
     
 class RetryInterceptor(grpc.UnaryUnaryClientInterceptor):
-    def __init__(self, max_attempts=5, initial_backoff=0.1, max_backoff=1.0, backoff_multiplier=2, retryable_status_codes=None):
+    # Total time for all retries is now 6.1 seconds
+    def __init__(self, max_attempts=5, initial_backoff=0.3, max_backoff=2, backoff_multiplier=2, retryable_status_codes=None):
         self.max_attempts = max_attempts
         self.initial_backoff = initial_backoff
         self.max_backoff = max_backoff
@@ -93,7 +94,6 @@ class RetryInterceptor(grpc.UnaryUnaryClientInterceptor):
                 print(f"Response received from server, returning response to client {actual_response}")
                 return response
                 
-                #return response  # Successful call, return the response
             except grpc.RpcError as e:
                 # If the status code is not in retryable codes, raise the error
                 if e.code() not in self.retryable_status_codes:
