@@ -66,6 +66,8 @@ class LockClient:
             if response.status == lock_pb2.Status.LOCK_NOT_ACQUIRED:
                 print(f"Client{self.client_id}: DID NOT OWN LOCK - reset lock_val")
                 self.lock_val = None
+            if response.status == lock_pb2.Status.WAITING_FOR_LOCK_RELEASE:
+                print(f"Release lock to confirm append")
             if test:
                 return response.status
         else:

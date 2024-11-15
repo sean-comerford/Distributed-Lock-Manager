@@ -22,10 +22,10 @@ port = '127.0.0.1:56751'
 class LockService(lock_pb2_grpc.LockServiceServicer):
 
 
-    def __init__(self,deadline=8,drop=False,load=False):
+    def __init__(self,deadline=4,drop=False,load=False):
         if(load):
             self.logger = Logger()
-            self.load_server_state_from_log( deadline=8)
+            self.load_server_state_from_log( deadline=4)
         else:
             self.locked = False #Is Lock locked?
             self.lock = threading.Lock() #Mutual Exclusion on shared resources (self.locked, client_counter and lock_owner)
@@ -46,6 +46,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             self.last_action_time = None
             self.deadline = timedelta(seconds=deadline)
             self.start_cache_clear_thread()
+            self.cs_cache = {}
 
     def log_processor(self):
         while True:
@@ -109,6 +110,11 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         '''Initialise cache with key = request_id and value =  0'''
         # This value will be updated when the server finishes processing the request
         self.response_cache[request_id] = None
+    
+    def initialise_cs_cache(self, request_id, filename, content):
+        '''Initialise cache with key = request_id, value = (filename, content)'''
+        if request_id not in self.cs_cache:
+            self.cs_cache[request_id] = (filename, content)
 
 
     def update_cache(self, request_id, response):
@@ -144,7 +150,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         self.initialise_cache(request_id)
         return None
 
-    def load_server_state_from_log(self, drop=False, deadline=8):
+    def load_server_state_from_log(self, drop=False, deadline=4):
         print("Server Loading from logs")
         self.lock_owner, self.lock_counter, self.response_cache, self.client_counter, self.locked = self.logger.load_log()
         self.lock = threading.Lock()
@@ -233,6 +239,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             self.lock_owner = None
             self.last_action_time = None
             self.condition.notify_all()
+            self.cs_cache.clear()
         
     def lock_release(self, request, context):
         # Process request
@@ -240,22 +247,34 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         if response:
             return response
         # If there is no response ready, process the request and create a response
-        request_id = self.get_request_id(context)
+        release_request_id = self.get_request_id(context)
         if self.locked and self.lock_owner == request.client_id and self.lock_counter == request.lock_val:
+            # Perform the appends in the critical section cache
+            for append_request_id, (filename, content) in self.cs_cache.items():
+                with open(filename, 'ab') as file:
+                    file.write(content)
+                    print(f"Appended {content} to file {filename}")
+                # Update the "Response" cache with the response to the client for these appends
+                response = lock_pb2.Response(status=lock_pb2.Status.SUCCESS)
+                self.update_cache(append_request_id, response)
+                print(f"Response cache has been updated with response to client for append to {filename} with content {content}")
+            # Then clear the critical section cache
+            print(f"Critical section cache cleared")
+            # Then release lock and clear the critical section cache
             self._lock_release()
             response = lock_pb2.Response(status=lock_pb2.Status.SUCCESS)
-            self.update_cache(request_id, response)
+            self.update_cache(release_request_id, response)
             self.log_state()
-            print(f"Lock released by client {request.client_id}")
+            print(f"Critical section performed by server and lock released by client {request.client_id}")
             return response
         elif not self.locked:
             response = lock_pb2.Response(status=lock_pb2.Status.FILE_ERROR)
-            self.update_cache(request_id, response)
+            self.update_cache(release_request_id, response)
             print(f"Client {request.client_id} attempted to release a lock that was not acquired.")
             return response #Not a file error but all we have in proto?
         else:
             response = lock_pb2.Response(status=lock_pb2.Status.FILE_ERROR)
-            self.update_cache(request_id, response)
+            self.update_cache(release_request_id, response)
             print(f"Client {request.client_id} attempted to release a lock owned by client {self.lock_owner}.")
             return response #Again Not file error
     
@@ -281,13 +300,17 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             self.update_cache(request_id, response)
             print(f"Filename {request.filename} does not exist")
             return response
-        with open(request.filename, 'ab') as file:
-            file.write(request.content)
-        response = lock_pb2.Response(status=lock_pb2.Status.SUCCESS)
+        # Store request in Critical section cache
+        self.initialise_cs_cache(request_id, request.filename, request.content)
+        print(f"Append operation cached in cs cache")
+        # Return a message to the client to release the lock to confirm the append
+        # Once server receives lock_release from client, it will perform all the appends in the critical section cache
+        # Then the critical section cache will be cleared, ready for the next critical section
+        # The main "Response" cache will then be updated with the response to the client for these appends and the lock_release. See lock_release method
+        response = lock_pb2.Response(status=lock_pb2.Status.WAITING_FOR_LOCK_RELEASE)
         self.last_action_time = datetime.now()
-        self.update_cache(request_id, response)
-        print(f"Client {request.client_id} appended to file {request.filename}")
         return response
+        
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="LockClient operations")
