@@ -26,7 +26,7 @@ class LockServiceWrapper:
         return self._lock_service.client_close(request, context)
 
     def lock_acquire(self, request, context):
-        print("Wrapper: lock_acquire called")
+        print(f"Wrapper: lock_acquire called by client {request.client_id}")
         if self.drop == 1:
                 self.drop = False
                 print(f"\n\n\nSIMULATED ARRIVAL PACKET LOSS for Client {request.client_id}.")
@@ -47,13 +47,13 @@ class LockServiceWrapper:
         return self._lock_service.lock_release(request, context)
 
     def file_append(self, request, context):
-        print("Wrapper: file_append called")
+        print(f"Wrapper: file_append called by client {request.client_id}")
         if self.drop == 5:
                     time.sleep(8.1)
                     self.drop = False
         self.testing_counter += 1
         if (self.drop == 4 and self.testing_counter==1):
-                print(f"\n\n\nSIMULATED PACKET ARRIVAL LOST {request.client_id}.")
+                print(f"\n\n\nSIMULATED PACKET ARRIVAL LOST. Append {request.content} for client {request.client_id}.")
                 # self.drop = False
                 time.sleep(12.1)
         response = self._lock_service.file_append(request, context)
