@@ -309,5 +309,5 @@ if __name__ == "__main__":
     lock_pb2_grpc.add_LockServiceServicer_to_server(LockService(drop=False,load=load), server)
     server.add_insecure_port(port)
     server.start()
-    print("Server started (localhost) on port 56751.")
+    print(f"Server started (localhost) on port {port}.")
     server.wait_for_termination()
