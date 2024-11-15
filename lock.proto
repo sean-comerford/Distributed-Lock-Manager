@@ -37,10 +37,27 @@ message Int {
     int32 rc = 1;
 }
 
+message raft_heartbeat_args {
+    int32 term = 1;
+    bool success = 2;
+} 
+
+message raft_request_args {
+    int32 term = 1;
+    string candidate_id = 2;
+}
+
+message raft_response_args {
+    bool vote_granted = 1;
+    int32 term = 2;
+}
+
 service LockService {
     rpc client_init(Int) returns (Response);
     rpc lock_acquire(lock_args) returns (Response);
     rpc lock_release(lock_args) returns (Response);
     rpc file_append(file_args) returns (Response);
     rpc client_close(Int) returns (Response);
+    rpc request_vote(raft_request_args) returns (raft_response_args);
+    rpc heartbeat(raft_request_args) returns (raft_heartbeat_args);
 }
