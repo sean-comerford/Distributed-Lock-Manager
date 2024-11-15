@@ -294,13 +294,19 @@ if __name__ == "__main__":
     parser.add_argument(
         "-l", "--load",
     )
+    parser.add_argument(
+        "-p", "--port",
+    )
     args = parser.parse_args()
     
     if args.load == "1":
         load = True
     else:
         load = False
+    if args.port:
+        port = args.port
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=100))
+    lock_pb2_grpc.add_LockServiceServicer_to_server(LockService(drop=False,load=load), server)
     server.add_insecure_port(port)
     server.start()
     print("Server started (localhost) on port 56751.")
