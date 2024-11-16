@@ -12,8 +12,7 @@ import lock_pb2_grpc
 
     
 class RetryInterceptor(grpc.UnaryUnaryClientInterceptor):
-    def __init__(self, client=None, max_attempts=5, initial_backoff=0.2, max_backoff=2.0, backoff_multiplier=2, retryable_status_codes=None):
-        self.client = client
+    def __init__(self, max_attempts=5, initial_backoff=0.2, max_backoff=2.0, backoff_multiplier=2, retryable_status_codes=None):
         self.max_attempts = max_attempts
         self.initial_backoff = initial_backoff
         self.max_backoff = max_backoff
@@ -125,8 +124,7 @@ class RetryInterceptor(grpc.UnaryUnaryClientInterceptor):
 
                 # If we've reached the max attempts, raise the error
                 if attempt == self.max_attempts - 1:
-                    
-                    return lock_pb2.Response(status=lock_pb2.Status.SERVER_UNAVAILABLE)                    
+                    raise                 
                     
                 # Wait before retrying
                 delay = self._retry_delay(attempt)
