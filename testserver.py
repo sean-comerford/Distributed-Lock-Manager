@@ -18,11 +18,15 @@ class LockServiceWrapper:
             if key == "request-id":
                 return value
         
-    def __init__(self, drop=False):
+    def __init__(self, drop=False,port=56751):
         # Initialize the actual LockService instance with the provided arguments
         self.drop = drop
         self.testing_counter =0
-        self._lock_service = LockService()
+        if port == 56751:
+            slave=False
+        else:
+             slave=True
+        self._lock_service = LockService(port=port,slave=slave)
     
     def client_init(self, request, context):
         print("Wrapper: client_init called")
@@ -53,6 +57,10 @@ class LockServiceWrapper:
                 time.sleep(1)
         return self._lock_service.lock_release(request, context)
 
+    def sendBytes(self, request, context):
+        print("Wrapper: sendBytes called")
+        return self._lock_service.sendBytes(request, context)
+
     def file_append(self, request, context):
         request_id = self.get_request_id(context)
         print(f"Wrapper: file_append called by client {request.client_id} to append {request.content} with request_id {request_id}")
@@ -80,13 +88,20 @@ if __name__ == "__main__":
         choices=[1, 2, 3, 4, 5],  # Limit acceptable values
         help="Drop packet on lock acquire: 1=lost on the way there, 2=lost on the way back"
     )
+    parser.add_argument(
+        "-p", "--port",
+    )
     args = parser.parse_args()
+    if args.port:
+        port1=args.port
+    else:
+        port1=str(56751)
 
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=100))
     if args.drop:
-        lock_pb2_grpc.add_LockServiceServicer_to_server(LockServiceWrapper(drop=args.drop), server)
+        lock_pb2_grpc.add_LockServiceServicer_to_server(LockServiceWrapper(drop=args.drop,port=port1), server)
     else:
-        lock_pb2_grpc.add_LockServiceServicer_to_server(LockServiceWrapper(drop=False), server)
+        lock_pb2_grpc.add_LockServiceServicer_to_server(LockServiceWrapper(drop=False,port=port1), server)
     server.add_insecure_port(port)
     server.start()
     print("Server started (localhost) on port 56751.")

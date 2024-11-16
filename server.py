@@ -76,25 +76,26 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
 
     def RPC_sendBytes(self):
         # Serialize the queue data to bytes
-        for i, queue in enumerate(self.queues):
-            print(f"Queue {i}")
-            if len(queue) == 0:
-                print(f"Queue {i+1} is empty, skipping...")
-                continue
-            
-            data = pickle.dumps(list(queue))  # Serialize the queue
-            request = lock_pb2.ByteMessage(data=data, lock_val=self.lock_counter)  # Use queue index as client_id for tracking
-            
-            # Send serialized data to the corresponding slave
-            slave_stub = self.slaves[i]  # Get the stub for the corresponding slave
-            response = slave_stub.sendBytes(request)
-            
-            # Check response status
-            if response.status == lock_pb2.Status.SUCCESS:
-                print(f"REPLICATION SUCCESSFUL for Queue {i+1}")
-                queue.clear()  # Clear the queue after successful replication
-            else:
-                print(f"REPLICATION FAILED for Queue {i+1}")
+        if self.slave==False:
+            for i, queue in enumerate(self.queues):
+                print(f"Queue {i}")
+                if len(queue) == 0:
+                    print(f"Queue {i+1} is empty, skipping...")
+                    continue
+                
+                data = pickle.dumps(list(queue))  # Serialize the queue
+                request = lock_pb2.ByteMessage(data=data, lock_val=self.lock_counter)  # Use queue index as client_id for tracking
+                
+                # Send serialized data to the corresponding slave
+                slave_stub = self.slaves[i]  # Get the stub for the corresponding slave
+                response = slave_stub.sendBytes(request)
+                
+                # Check response status
+                if response.status == lock_pb2.Status.SUCCESS:
+                    print(f"REPLICATION SUCCESSFUL for Queue {i+1}")
+                    queue.clear()  # Clear the queue after successful replication
+                else:
+                    print(f"REPLICATION FAILED for Queue {i+1}")
 
     def sendBytes(self, request, context):
         print("-----SERVER RECEIVED BYTES-----")
@@ -331,13 +332,15 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             print(f"Lock owner has been set to None")
             self.last_action_time = None
             self.condition.notify_all()
-            for queue in self.queues:
-                queue.append(self.cs_cache)
+            if self.slave==False:
+                for queue in self.queues:
+                    queue.append(self.cs_cache)
             print(self.response_cache)
             for append_request_id, response in self.cs_cache.items():
                 self.update_cache(append_request_id, response)
             self.log_state()
-            self.RPC_sendBytes()
+            if self.slave==False:
+                self.RPC_sendBytes()
             self.cs_cache.clear()
         
     def lock_release(self, request, context):
@@ -371,7 +374,6 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             self.update_cache(release_request_id, response)
             self.log_state()
             print(f"Critical section performed by server and Lock released by client {request.client_id}")
-            # self.RPC_sendBytes()
             return response
         elif not self.locked:
             response = lock_pb2.Response(status=lock_pb2.Status.FILE_ERROR)
@@ -438,18 +440,16 @@ if __name__ == "__main__":
         load = True
     else:
         load = False
-    if args.port:
-        port = args.port
     if args.slave:
         slave = True
     else:
         slave = False
     if args.port:
-        port1=args.port
+        port="127.0.0.1:"+args.port
     else:
-        port1=str(56751)
+        port="127.0.0.1:"+str(56751)
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=100))
-    lock_pb2_grpc.add_LockServiceServicer_to_server(LockService(drop=False,load=load,slave=slave,port=port1), server)
+    lock_pb2_grpc.add_LockServiceServicer_to_server(LockService(drop=False,load=load,slave=slave,port=port[-5:]), server)
     server.add_insecure_port(port)
     server.start()
     print(f"Server started (localhost) on port {port}.")
