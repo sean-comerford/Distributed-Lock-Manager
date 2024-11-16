@@ -6,13 +6,21 @@ import json
 from middleware import RetryInterceptor
 import time
 
+ports = [
+            'localhost:56751',
+            'localhost:56752',
+            'localhost:56753'
+]
+
 class LockClient:
     def __init__(self, interceptor=None):
         # Create channel with or without the interceptor
+        self.leader = self.RPC_get_leader()
         if interceptor:
-            self.channel = grpc.intercept_channel(grpc.insecure_channel('localhost:56751'),interceptor)
+            interceptor.client = self
+            self.channel = grpc.intercept_channel(grpc.insecure_channel(self.leader),interceptor)
         else:
-            self.channel = grpc.insecure_channel('localhost:56751')
+            self.channel = grpc.insecure_channel(self.leader)
 
         # Create stub
         self.stub = lock_pb2_grpc.LockServiceStub(self.channel)
@@ -39,8 +47,13 @@ class LockClient:
         request = lock_pb2.Int()
         # response = self.retries(max_retries=5,place=self.stub.client_init,query=request)
         response = self.stub.client_init(request)
-        self.client_id = response.id_num
-        print(f"Client{self.client_id}:Successfully connected to server with client ID: {self.client_id}")
+        if(response.status==lock_pb2.Status.SERVER_UNAVAILABLE):
+            self.leader = self.RPC_get_leader()
+            self.update_stub()
+            self.RPC_init()
+        else:
+            self.client_id = response.id_num
+            print(f"Client{self.client_id}:Successfully connected to server with client ID: {self.client_id}")
             
     def RPC_lock_acquire(self):
         if self.lock_val == None:
@@ -50,6 +63,10 @@ class LockClient:
             if response.status == lock_pb2.Status.SUCCESS:
                 print(f"Client{self.client_id}:Lock acquired")
                 self.lock_val = response.id_num
+            elif (response.status==lock_pb2.Status.SERVER_UNAVAILABLE):
+                self.leader = self.RPC_get_leader()
+                self.update_stub()
+                self.RPC_lock_acquire()
         else:
             print(f"Client{self.client_id}:LOCK ALREADY OWNED")
 
@@ -59,6 +76,10 @@ class LockClient:
         response = self.stub.lock_release(request)
         if response.status == lock_pb2.Status.SUCCESS:
             print(f"Client{self.client_id}:Lock released")
+        elif (response.status==lock_pb2.Status.SERVER_UNAVAILABLE):
+                self.leader = self.RPC_get_leader()
+                self.update_stub()
+                self.RPC_lock_release()
         else:
             print(f"Client{self.client_id}:DID NOT OWN LOCK - reset lock_val")
         self.lock_val = None
@@ -70,18 +91,45 @@ class LockClient:
             if response.status == lock_pb2.Status.LOCK_NOT_ACQUIRED:
                 print(f"Client{self.client_id}: DID NOT OWN LOCK - reset lock_val")
                 self.lock_val = None
+            elif (response.status==lock_pb2.Status.SERVER_UNAVAILABLE):
+                self.leader = self.RPC_get_leader()
+                self.update_stub()
+                self.RPC_append_file()
             if test:
                 return response.status
         else:
             print(f"Client{self.client_id}:  ERROR: LOCK_EXPIRED")
 
+    def RPC_get_leader(self):
+        for server in ports:
+            try:
+                self.channel = grpc.insecure_channel(server)
+                self.stub = lock_pb2_grpc.LockServiceStub(self.channel)
+                response = self.stub.get_leader(lock_pb2.Int())
+                if response.status == lock_pb2.Status.SUCCESS:
+                    leader_server = response.server
+                    print(f"Leader discovered at {leader_server}")
+                    return leader_server
+            except grpc.RpcError:
+                continue
+        raise Exception("Failed to discover leader.")
 
     def RPC_close(self):
         request = lock_pb2.Int(rc=self.client_id)
         response = self.stub.client_close(request)
+        if (response.status==lock_pb2.Status.SERVER_UNAVAILABLE):
+                self.leader = self.RPC_get_leader()
+                self.update_stub()
+                self.RPC_close()
         # Explicitly closing the gRPC channel.
         self.channel.close()
         print(f"Client{self.client_id}:Client connection closed.")
+        
+    def update_stub(self):
+        channel = grpc.insecure_channel(self.leader)
+        self.stub = lock_pb2_grpc.LockServiceStub(channel)
+        
+        
 
 # Interactive command loop for testing and debugging
 def command_loop(client):
