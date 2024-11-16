@@ -37,7 +37,7 @@ class State(Enum):
 
 class LockService(lock_pb2_grpc.LockServiceServicer):
 
-    def __init__(self,port=56751,deadline=4,drop=False,load=False,slave=False):
+    def __init__(self,port=56751,deadline=4,drop=False,load=False):
         if(load):
             self.logger = Logger()
             self.load_server_state_from_log( deadline=4)
@@ -69,27 +69,25 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             self.folderpath = "./filestore/"+str(self.port)
             if not os.path.exists(self.folderpath):
                 os.makedirs(self.folderpath)
-            self.slave = slave
-            if not self.slave:
-                self.slaves = []  # List to store LockServiceStubs for each slave
-                self.queues = []  # List to store queues for each slave
-                
-                # Dynamically create channels and associated stubs and queues for n slaves
-                available_ports = [56751,56752,56753]
-                available_ports.remove(int(self.port))
-                for i in range(len(available_ports)):
-                    port = available_ports[i]
-                    channel = grpc.insecure_channel(f'localhost:{port}')
-                    stub = lock_pb2_grpc.LockServiceStub(channel)
-                    self.slaves.append(stub)
-                    self.queues.append(deque())
 
+            self.slaves = []  # List to store LockServiceStubs for each slave
+            self.queues = []  # List to store queues for each slave
+            
+            # Dynamically create channels and associated stubs and queues for n slaves
+            available_ports = [56751,56752,56753]
+            available_ports.remove(int(self.port))
+            for i in range(len(available_ports)):
+                port = available_ports[i]
+                channel = grpc.insecure_channel(f'localhost:{port}')
+                stub = lock_pb2_grpc.LockServiceStub(channel)
+                self.slaves.append(stub)
+                self.queues.append(deque())
 
 
 
     def RPC_sendBytes(self):
         # Serialize the queue data to bytes
-        if self.slave==False:
+        if self.role==State.LEADER:
             for i, queue in enumerate(self.queues):
                 print(f"Queue {i}")
                 if len(queue) == 0:
@@ -478,14 +476,14 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             print(f"Lock owner has been set to None")
             self.last_action_time = None
             self.condition.notify_all()
-            if self.slave==False:
+            if self.role==State.LEADER:
                 for queue in self.queues:
                     queue.append(self.cs_cache)
             print(self.response_cache)
             for append_request_id, response in self.cs_cache.items():
                 self.update_cache(append_request_id, response)
             self.log_state()
-            if self.slave==False:
+            if self.role==State.LEADER:
                 self.RPC_sendBytes()
             self.cs_cache.clear()
         
@@ -576,12 +574,6 @@ if __name__ == "__main__":
         "-l", "--load",
     )
     parser.add_argument(
-        "-p", "--port",
-    )
-    parser.add_argument(
-        "-s", "--slave",
-    )
-    parser.add_argument(
         "-p", "--port", type=int, choices=[56751, 56752, 56753], required=True, help="Port for Raft node"
     )
     
@@ -591,16 +583,12 @@ if __name__ == "__main__":
         load = True
     else:
         load = False
-    if args.slave:
-        slave = True
-    else:
-        slave = False
     if args.port:
-        port="127.0.0.1:"+args.port
+        port="127.0.0.1:"+str(args.port)
     else:
         port="127.0.0.1:"+str(56751)
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=100))
-    lock_pb2_grpc.add_LockServiceServicer_to_server(LockService(drop=False,load=load,slave=slave,port=port[-5:]), server)
+    lock_pb2_grpc.add_LockServiceServicer_to_server(LockService(drop=False,load=load,port=port[-5:]), server)
     server.add_insecure_port(port)
     server.start()
     print(f"Server started (localhost) on port {port}.")
