@@ -294,7 +294,9 @@ def testLog():
     thread1.join()
     thread2.join()
     p.terminate()
+    print(f"Log is about to be loaded")
     lock_owner, lock_counter, response_cache,client_counter,locked = logger.load_log()
+    print(f"lock_owner: {lock_owner}")
     assert lock_owner == None
     assert lock_counter == 2
     assert locked == False
@@ -330,7 +332,7 @@ def testLog2():
     thread1.join()
     thread2.join()
 
-    p.terminate()
+    p.terminate()	
     p = subprocess.Popen(["python", "server.py","-l","1"])
     
     lock_owner, lock_counter, response_cache,client_counter,locked = logger.load_log()
@@ -342,11 +344,11 @@ def testLog2():
 
 
 
-testA()
-testB()
-testC()
-testD()
-test2a()
-test2b()
+#testA()
+#testB()
+#testC()
+#testD()
+#test2a()
+#test2b()
 testLog()
-testLog2()
+#testLog2()

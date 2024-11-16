@@ -248,6 +248,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         with self.condition:
             self.locked = False
             self.lock_owner = None
+            print(f"Lock owner has been set to None")
             self.last_action_time = None
             self.condition.notify_all()
             self.cs_cache.clear()
