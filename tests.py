@@ -294,7 +294,6 @@ def testLog():
     thread1.join()
     thread2.join()
     p.terminate()
-    print(f"Log is about to be loaded")
     lock_owner, lock_counter, response_cache,client_counter,locked = logger.load_log()
     print(f"lock_owner: {lock_owner}")
     assert lock_owner == None
@@ -344,11 +343,11 @@ def testLog2():
 
 
 
-#testA()
-#testB()
-#testC()
-#testD()
-#test2a()
-#test2b()
+testA()
+testB()
+testC()
+testD()
+test2a()
+test2b()
 testLog()
-#testLog2()
+testLog2()
