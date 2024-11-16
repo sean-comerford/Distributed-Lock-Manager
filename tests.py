@@ -256,7 +256,7 @@ def test2a():
 
 # Part 2b: Stucks after editing the file
 def test2b():
-    p = subprocess.Popen (["python", "testserver.py","-d","4","-p","56751"])
+    p = subprocess.Popen (["python", "testserver.py","-p","56751"])
     p2 = subprocess.Popen(["python", "server.py","-p","56752"])
     p3 = subprocess.Popen(["python", "server.py","-p","56753"])
     open("./filestore/56751/file_1.txt", 'w').close()
@@ -302,6 +302,34 @@ def test2b():
     assert open("./filestore/56751/file_1.txt", 'r').read() == "BBAA"
     print("TEST 2b PASSED")
 
+# test 3)a) single server fail, lock is free
+def test3a():
+    open("./filestore/56751/file_1.txt", 'w').close()
+    open("./filestore/56751/56751.json", 'w').close()
+    time.sleep(1)
+    p = subprocess.Popen (["python", "server.py","-p","56751"])
+    time.sleep(1)
+    print("hello")
+    client= LockClient(interceptor=RetryInterceptor())
+    client.RPC_init()
+    client.RPC_lock_acquire()
+    client.RPC_append_file("file_1.txt", "A")
+    client.RPC_append_file("file_1.txt", "A")
+    client.RPC_lock_release()
+    time.sleep(1)
+    p.terminate()
+    open("./filestore/56751/file_1.txt", 'w').close()
+    p = subprocess.Popen (["python", "server.py","-p","56751","-l","1"])
+    time.sleep(1)
+    client.RPC_init()
+    client.RPC_lock_acquire()
+    client.RPC_append_file("file_1.txt", "1")
+    client.RPC_lock_release()
+    p.terminate()   
+    
+    assert open("./filestore/56751/file_1.txt", 'r').read() == "AA1"
+    print("TEST 3a PASSED")
+
 
 testA()
 testB()
@@ -309,3 +337,4 @@ testC()
 testD()
 test2a()
 test2b()
+test3a()

@@ -37,9 +37,9 @@ class State(Enum):
 
 class LockService(lock_pb2_grpc.LockServiceServicer):
 
-    def __init__(self,port=56751,deadline=4,drop=False,load=False):
+    def __init__(self,port="127.0.0.1:56751",deadline=4,drop=False,load=False):
         if(load):
-            self.logger = Logger()
+            self.logger = Logger(filepath="./filestore/"+str(port[-5:])+"/"+str(port[-5:])+".json")
             self.load_server_state_from_log( deadline=4)
         else:
             self.locked = False #Is Lock locked?
@@ -99,7 +99,11 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
                 
                 # Send serialized data to the corresponding slave
                 slave_stub = self.slaves[i]  # Get the stub for the corresponding slave
-                response = slave_stub.sendBytes(request)
+                try:
+                    response = slave_stub.sendBytes(request)
+                except grpc._channel._InactiveRpcError as e:
+                    print(f"REPLICATION FAILED for Queue {i+1}")
+                    continue
                 
                 # Check response status
                 if response.status == lock_pb2.Status.SUCCESS:
@@ -145,6 +149,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         if self.port == "127.0.0.1:56751":
             print("DEFAULT LEADER SET TO 56751")
             self.role = State.LEADER
+            self.leader = self.port
             self.term = 1
             self.broadcast_heartbeat()
         else:
@@ -392,20 +397,59 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
     def load_server_state_from_log(self, drop=False, deadline=4):
         print("Server Loading from logs")
         self.lock_owner, self.lock_counter, self.response_cache, self.client_counter, self.locked = self.logger.load_log()
-        self.lock = threading.Lock()
-        self.condition = threading.Condition(self.lock)
-        self.files = {f'file_{i}.txt': [] for i in range(100)}
-        self.response_cache = OrderedDict()
+        
+        self.lock_owner = None
+        self.client_counter = 0
+        self.lock = threading.Lock() #Mutual Exclusion on shared resources (self.locked, client_counter and lock_owner)
+        self.condition = threading.Condition(self.lock) #Coordinate access to the lock by allowing threads (clients) to wait until lock availabel
+        self.files = {f'file_{i}.txt': [] for i in range(100)} #Change to however we want out files to look
+        self.init_raft(port)
+        # Cache to store the processed requests and their responses
         self.cache_lock = threading.Lock()
-        self.logger = Logger()
-        self.drop = drop
+        
         self.periodic_thread = threading.Thread(target=self._execute_periodically, daemon=True)
         self.periodic_thread.start()
         self.log_queue = queue.Queue()
         self.logging_thread = threading.Thread(target=self.log_processor, daemon=True)
         self.logging_thread.start()
-        self.deadline = deadline
+        self.last_action_time = None
+        self.deadline = timedelta(seconds=deadline)
         self.start_cache_clear_thread()
+        self.cs_cache = {}
+
+        # replication setup
+        port_numbers = port[-5:]
+        self.folderpath = "./filestore/"+str(port_numbers)
+        if not os.path.exists(self.folderpath):
+            os.makedirs(self.folderpath)
+
+        self.slaves = []  # List to store LockServiceStubs for each slave
+        self.queues = []  # List to store queues for each slave
+        
+        # Dynamically create channels and associated stubs and queues for n slaves
+        available_ports = [56751,56752,56753]
+        available_ports.remove(int(port_numbers))
+        for i in range(len(available_ports)):
+            p = available_ports[i]
+            channel = grpc.insecure_channel(f'localhost:{p}')
+            stub = lock_pb2_grpc.LockServiceStub(channel)
+            self.slaves.append(stub)
+            self.queues.append(deque())
+        self.rebuild_files()
+    
+    def rebuild_files(self):
+        for key, value in self.response_cache.items():
+            # Check if the value is a dictionary containing 'filename' and 'content'
+            if isinstance(value, dict) and 'filename' in value and 'content' in value:
+                filename = value['filename']
+                content = value['content']
+                
+                # Write the content to the file
+                with open(self.folderpath+"/"+filename, 'a') as file:
+                    file.write(content)
+                print(f"Appended content to {filename}.")
+            else:
+                print(f"Skipping entry with key {key} as it does not contain a file definition.")
 
 
     def get_leader(self,request,context):
