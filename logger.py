@@ -8,16 +8,19 @@ class Logger:
     def serialize_cache(self,cache):
         def serialize_tuple(response):
             """Serializes a tuple response (e.g., filename and content)."""
+            if response is None:
+                return "none"
             if len(response) == 2:
                 filename, content = response
                 # Decode bytes to a string
                 return {'filename': filename, 'content': content.decode('utf-8')}
             return None  # Handle invalid or empty tuples
 
+        # if response is none return none, if response response.status, if tuple serialize it
         return {
             request_id: (
                 response.status  # If response is lock_pb2.Response, use its status
-                if not isinstance(response, tuple) 
+                if isinstance(response, lock_pb2.Response) 
                 else serialize_tuple(response)  # Otherwise, serialize the tuple
             )
             for request_id, response in cache.items()
