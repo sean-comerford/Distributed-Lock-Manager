@@ -154,6 +154,7 @@ def testD():
     def client1_behaviour():
         client= LockClient(interceptor=RetryInterceptor())
         client.RPC_init()
+        print(f"Client 1: {client.client_id}")
         client.RPC_lock_acquire()
         client.RPC_append_file("file_1.txt", "1")
         client.RPC_append_file("file_1.txt", "A")
@@ -163,8 +164,10 @@ def testD():
         client= LockClient(interceptor=RetryInterceptor())
         time.sleep(0.1)
         client.RPC_init()
+        print(f"Client 2: {client.client_id}")
         client.RPC_lock_acquire()
         client.RPC_append_file("file_1.txt", "B")
+        client.RPC_lock_release()
         
     thread1 = threading.Thread(target=client1_behaviour)
     thread2 = threading.Thread(target=client2_behaviour)
@@ -292,6 +295,7 @@ def testLog():
     thread2.join()
     p.terminate()
     lock_owner, lock_counter, response_cache,client_counter,locked = logger.load_log()
+    print(f"lock_owner: {lock_owner}")
     assert lock_owner == None
     assert lock_counter == 2
     assert locked == False
@@ -327,7 +331,7 @@ def testLog2():
     thread1.join()
     thread2.join()
 
-    p.terminate()
+    p.terminate()	
     p = subprocess.Popen(["python", "server.py","-l","1"])
     
     lock_owner, lock_counter, response_cache,client_counter,locked = logger.load_log()

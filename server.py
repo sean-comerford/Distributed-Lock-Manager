@@ -205,22 +205,32 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         #print(f"Received initial metadata from client: {metadata_str}")
 
 
-    def process_request(self, context):
+    def process_request(self, request, context):
         '''Process request from client to see if it has been cached etc.'''
         # Print metadata
         self.print_metadata(context)
         # Get request ID
         request_id = self.get_request_id(context)
         # Check if request_id is cached
+        if request_id in self.cs_cache:
+            print(f"Append operation is in the critical section cache. Waiting for lock release.")
+            response = lock_pb2.Response(status=lock_pb2.Status.WAITING_FOR_LOCK_RELEASE)
+            return response
         if request_id in self.response_cache:
             cached_response = self.return_cached_response(request_id, context)
             # If the request_id is cached but its value hasnt been updated yet (i.e value is None), server is still working on request
             if cached_response == None:
                 response = lock_pb2.Response(status=lock_pb2.Status.WORKING_ON_IT)
-                print(f"Server is slow and still working on request {request_id}.")
+                print(f"Server has seen this request before {request_id}.")
+                if self.lock_owner == request.client_id and self.lock_counter == request.lock_val:
+                    self.last_action_time = datetime.now()
+                    print(f"Lock timeout has been updated")
                 return response
             # If the request_id is cached and its value has been updated (i.e. value is not None), return the response
             print(f"Cached response found for request {request_id}. Returning response")
+            if self.lock_owner == request.client_id and self.lock_counter == request.lock_val:
+                self.last_action_time = datetime.now()
+                print(f"Lock timeout has been updated")
             return cached_response
         # If request_id is not cached, initialise the cache with the request_id and set the response to None, then proceed to process the request
         print(f"No cache response found for request {request_id}. Processing request")
@@ -252,7 +262,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
     def client_init(self, request, context):
         '''Initialise client'''
         # Process request
-        response = self.process_request(context)
+        response = self.process_request(request, context)
         if response:
             return response
         # If there is no response ready, process the request and create a response
@@ -269,7 +279,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
     def client_close(self, request, context):
         '''Close client'''
         # Process request
-        response = self.process_request(context)
+        response = self.process_request(request, context)
         if response:
             return response
         # If there is no response ready, process the request and create a response
@@ -289,7 +299,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
     
     def lock_acquire(self, request, context):
         # Process request
-        response = self.process_request(context)
+        response = self.process_request(request, context)
         if response:
             return response
         # If there is no response ready, process the request and create a response
@@ -304,6 +314,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             self.lock_owner = request.client_id
             self.lock_counter += 1
             self.last_action_time = datetime.now()
+            print(f"Lock timeout has been updated")
             response = lock_pb2.Response(status=lock_pb2.Status.SUCCESS,id_num=self.lock_counter)
             self.update_cache(request_id, response)
             self.log_state()
@@ -317,6 +328,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         with self.condition:
             self.locked = False
             self.lock_owner = None
+            print(f"Lock owner has been set to None")
             self.last_action_time = None
             self.condition.notify_all()
             for queue in self.queues:
@@ -330,7 +342,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         
     def lock_release(self, request, context):
         # Process request
-        response = self.process_request(context)
+        response = self.process_request(request, context)
         if response:
             return response
         # If there is no response ready, process the request and create a response
@@ -374,7 +386,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
     
     def file_append(self, request, context):
         # Process request
-        response = self.process_request(context)
+        response = self.process_request(request, context)
         if response:
             return response
         # If there is no response ready, process the request and create a response
@@ -405,6 +417,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         # replica data added to queue
 
         self.last_action_time = datetime.now()
+        print(f"Lock timeout has been updated")
         return response
         
     
