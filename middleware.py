@@ -56,13 +56,14 @@ class RetryInterceptor(grpc.UnaryUnaryClientInterceptor):
             # Update client_call_details with modified metadata and timeout if this is the first attempt
             client_call_details = client_call_details._replace(
                 metadata=metadata,
-                timeout=2  # Set the call timeout to 10 seconds
+                timeout=2  # Set the call timeout to 2 seconds
             )
 
 
             response = None
             try:
                 # Interceptor receives the response back from the server
+                # When below line is called, an RPC call is made to the server with the provided request and client_call_details
                 response = continuation(client_call_details, request)
                 # If the response is an error (e.g. a timeout waiting for the server to respond), raise the error
                 if type(response) == grpc._channel._InactiveRpcError:
@@ -91,7 +92,7 @@ class RetryInterceptor(grpc.UnaryUnaryClientInterceptor):
                     return response
                     
                 # If the response is not an error or WORKING_ON_IT, return the response to the client
-                print(f"Response received from server, returning response to client {actual_response}")
+                print(f"Response received from server, interceptor returning response to client {actual_response}")
                 return response
                 
             except grpc.RpcError as e:
