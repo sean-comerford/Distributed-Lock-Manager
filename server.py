@@ -52,7 +52,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             # Cache to store the processed requests and their responses
             self.response_cache = OrderedDict()
             self.cache_lock = threading.Lock()
-            self.logger = Logger(filepath="./filestore/"+str(port)+"/"+str(port)+".json")
+            self.logger = Logger(filepath="./filestore/"+str(port[-5:])+"/"+str(port[-5:])+".json")
             self.lock_counter = 0
             self.periodic_thread = threading.Thread(target=self._execute_periodically, daemon=True)
             self.periodic_thread.start()
@@ -139,13 +139,23 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
 
     def init_raft(self, port):
         self.port = port
-        self.term = 0
-        self.voted_for = None
-        self.role = State.FOLLOWER
-        self.leader = None
-        self.timeout = random.uniform(2,3)
         self.heartbeat_timeout=1
-        self.reset_timer()
+        self.term = 0
+        self.leader = None
+        if self.port == "127.0.0.1:56751":
+            print("DEFAULT LEADER SET TO 56751")
+            self.role = State.LEADER
+            self.term = 1
+            self.broadcast_heartbeat()
+        else:
+            self.role = State.FOLLOWER
+            self.reset_timer()
+        
+        self.voted_for = None
+        
+        self.timeout = random.uniform(2,3)
+        
+        
     
     def reset_heartbeat_timer(self):
         if hasattr(self, 'heartbeat_timer') and self.heartbeat_timer is not None:

@@ -15,7 +15,7 @@ from logger import Logger
 
 def testA():
     
-    p = subprocess.Popen(["python", "testserver.py","-d","5"])
+    p = subprocess.Popen(["python", "testserver.py","-d","5","-p","56751"])
     p2 = subprocess.Popen(["python", "server.py","-p","56752"])
     p3 = subprocess.Popen(["python", "server.py","-p","56753"])
     open("./filestore/56751/file_1.txt", 'w').close()
@@ -25,12 +25,14 @@ def testA():
         client.RPC_init()
         client.RPC_lock_acquire()
         status = client.RPC_append_file("file_1.txt", "A",test=True)  
+        time.sleep(5)
         print(f"Status: {status}")
         assert status ==lock_pb2.Status.LOCK_EXPIRED
         print("-------------STATUS CODE CORRECT------------")
     def client2_behaviour():
         client2 = LockClient(interceptor=RetryInterceptor())             
         client2.RPC_init()
+        time.sleep(0.1)
         client2.RPC_lock_acquire()
     thread1 = threading.Thread(target=client1_behaviour)
     thread2 = threading.Thread(target=client2_behaviour)
@@ -55,7 +57,7 @@ def testA():
 
 # Test B: Packet Drop
 def testB():
-    p = subprocess.Popen(["python", "testserver.py","-d","1"])
+    p = subprocess.Popen(["python", "testserver.py","-d","1","-p","56751"])
     p2 = subprocess.Popen(["python", "server.py","-p","56752"])
     p3 = subprocess.Popen(["python", "server.py","-p","56753"])
     open("./filestore/56751/file_1.txt", 'w').close()
@@ -90,7 +92,7 @@ def testB():
     # part b
     print("TEST b)a) PASSED")
     
-    p = subprocess.Popen (["python", "testserver.py","-d","2"])
+    p = subprocess.Popen (["python", "testserver.py","-d","2","-p","56751"])
     p2 = subprocess.Popen(["python", "server.py","-p","56752"])
     p3 = subprocess.Popen(["python", "server.py","-p","56753"])
     open("./filestore/56751/file_1.txt", 'w').close()
@@ -127,7 +129,7 @@ def testB():
 #Test C Duplicated Requests:
 def testC():
     
-    p = subprocess.Popen (["python", "testserver.py","-d","3"])
+    p = subprocess.Popen (["python", "testserver.py","-d","3","-p","56751"])
     p2 = subprocess.Popen(["python", "server.py","-p","56752"])
     p3 = subprocess.Popen(["python", "server.py","-p","56753"])
     open("./filestore/56751/file_1.txt", 'w').close()
@@ -168,7 +170,7 @@ def testC():
 
 #Test D Combined network failures:
 def testD():
-    p = subprocess.Popen (["python", "testserver.py","-d","4"])
+    p = subprocess.Popen (["python", "testserver.py","-d","4","-p","56751"])
     p2 = subprocess.Popen(["python", "server.py","-p","56752"])
     p3 = subprocess.Popen(["python", "server.py","-p","56753"])
     open("./filestore/56751/file_1.txt", 'w').close()
@@ -208,7 +210,7 @@ def testD():
 
 # Part 2: Client Fails/Stucks
 def test2a():
-    p = subprocess.Popen (["python", "testserver.py"])
+    p = subprocess.Popen (["python", "testserver.py","-p","56751"])
     p2 = subprocess.Popen(["python", "server.py","-p","56752"])
     p3 = subprocess.Popen(["python", "server.py","-p","56753"])
     open("./filestore/56751/file_1.txt", 'w').close()
@@ -254,7 +256,7 @@ def test2a():
 
 # Part 2b: Stucks after editing the file
 def test2b():
-    p = subprocess.Popen (["python", "testserver.py","-d","4"])
+    p = subprocess.Popen (["python", "testserver.py","-d","4","-p","56751"])
     p2 = subprocess.Popen(["python", "server.py","-p","56752"])
     p3 = subprocess.Popen(["python", "server.py","-p","56753"])
     open("./filestore/56751/file_1.txt", 'w').close()
