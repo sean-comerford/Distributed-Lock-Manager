@@ -38,10 +38,17 @@ message Int {
     int32 rc = 1;
 }
 
+// New message for sending raw bytes
+message ByteMessage {
+    bytes data = 1;  // Raw byte data to send
+    int32 lock_val = 2;  // Client identifier
+}
+
 service LockService {
     rpc client_init(Int) returns (Response);
     rpc lock_acquire(lock_args) returns (Response);
     rpc lock_release(lock_args) returns (Response);
     rpc file_append(file_args) returns (Response);
     rpc client_close(Int) returns (Response);
+    rpc sendBytes(ByteMessage) returns (Response);
 }
