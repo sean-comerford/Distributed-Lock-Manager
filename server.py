@@ -128,7 +128,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         #print(f"Received initial metadata from client: {metadata_str}")
 
 
-    def process_request(self, context):
+    def process_request(self, request, context):
         '''Process request from client to see if it has been cached etc.'''
         # Print metadata
         self.print_metadata(context)
@@ -145,13 +145,15 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             if cached_response == None:
                 response = lock_pb2.Response(status=lock_pb2.Status.WORKING_ON_IT)
                 print(f"Server has seen this request before {request_id}.")
-                self.last_action_time = datetime.now()
-                print(f"Lock timeout has been updated")
+                if self.lock_owner == request.client_id and self.lock_counter == request.lock_val:
+                    self.last_action_time = datetime.now()
+                    print(f"Lock timeout has been updated")
                 return response
             # If the request_id is cached and its value has been updated (i.e. value is not None), return the response
             print(f"Cached response found for request {request_id}. Returning response")
-            self.last_action_time = datetime.now()
-            print(f"Lock timeout has been updated")
+            if self.lock_owner == request.client_id and self.lock_counter == request.lock_val:
+                self.last_action_time = datetime.now()
+                print(f"Lock timeout has been updated")
             return cached_response
         # If request_id is not cached, initialise the cache with the request_id and set the response to None, then proceed to process the request
         print(f"No cache response found for request {request_id}. Processing request")
@@ -180,7 +182,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
     def client_init(self, request, context):
         '''Initialise client'''
         # Process request
-        response = self.process_request(context)
+        response = self.process_request(request, context)
         if response:
             return response
         # If there is no response ready, process the request and create a response
@@ -197,7 +199,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
     def client_close(self, request, context):
         '''Close client'''
         # Process request
-        response = self.process_request(context)
+        response = self.process_request(request, context)
         if response:
             return response
         # If there is no response ready, process the request and create a response
@@ -217,7 +219,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
     
     def lock_acquire(self, request, context):
         # Process request
-        response = self.process_request(context)
+        response = self.process_request(request, context)
         if response:
             return response
         # If there is no response ready, process the request and create a response
@@ -252,7 +254,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         
     def lock_release(self, request, context):
         # Process request
-        response = self.process_request(context)
+        response = self.process_request(request, context)
         if response:
             return response
         # If there is no response ready, process the request and create a response
@@ -289,7 +291,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
     
     def file_append(self, request, context):
         # Process request
-        response = self.process_request(context)
+        response = self.process_request(request, context)
         if response:
             return response
         # If there is no response ready, process the request and create a response
