@@ -65,8 +65,8 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             self.cs_cache = {}
 
             # replication setup
-            self.port = port
-            self.folderpath = "./filestore/"+str(self.port)
+            port_numbers = port[-5:]
+            self.folderpath = "./filestore/"+str(port_numbers)
             if not os.path.exists(self.folderpath):
                 os.makedirs(self.folderpath)
 
@@ -75,10 +75,10 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             
             # Dynamically create channels and associated stubs and queues for n slaves
             available_ports = [56751,56752,56753]
-            available_ports.remove(int(self.port))
+            available_ports.remove(int(port_numbers))
             for i in range(len(available_ports)):
-                port = available_ports[i]
-                channel = grpc.insecure_channel(f'localhost:{port}')
+                p = available_ports[i]
+                channel = grpc.insecure_channel(f'localhost:{p}')
                 stub = lock_pb2_grpc.LockServiceStub(channel)
                 self.slaves.append(stub)
                 self.queues.append(deque())
@@ -588,7 +588,7 @@ if __name__ == "__main__":
     else:
         port="127.0.0.1:"+str(56751)
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=100))
-    lock_pb2_grpc.add_LockServiceServicer_to_server(LockService(drop=False,load=load,port=port[-5:]), server)
+    lock_pb2_grpc.add_LockServiceServicer_to_server(LockService(drop=False,load=load,port=port), server)
     server.add_insecure_port(port)
     server.start()
     print(f"Server started (localhost) on port {port}.")
