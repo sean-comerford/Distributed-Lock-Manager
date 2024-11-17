@@ -105,6 +105,8 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         # Serialize the queue data to bytes
         self.log_updated_reply_counter = 1
         if self.role==State.LEADER:
+            # There is one self.queues list for each replica
+            # Iterate through each of the replicas and their queue
             for i, queue in enumerate(self.queues):
                 print(f"Queue {i}")
                 if len(queue) == 0:
@@ -121,31 +123,33 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
                 success = False
                 max_attempts = 5
                 
-                while attempt < max_attempts:
+                while attempt < max_attempts + 1:
                     try:
-                        response = slave_stub.sendBytes(request, timeout = self.update_log_deadline)
+                        response = slave_stub.sendBytes(request)
 
                         # Check response from replica server
                         if response.status == lock_pb2.Status.LOG_UPDATED:
                             self.log_updated_reply_counter += 1
-                            print(f"REPLICATION SUCCESSFUL for Queue {i+1}")
+                            print(f"REPLICATION SUCCESSFUL for replica {i+1}")
                             queue.clear()
                             success = True
                             break
                         else:
-                            print(f"REPLICATION FAILED for Queue {i+1}, Retrying...")
+                            print(f"REPLICATION FAILED for Replica {i+1}, Will retry with {attempt+ 1} out of {max_attempts}...")
 
                     except grpc._channel._InactiveRpcError as e:
                         if attempt == max_attempts - 1:
-                            print(f"REPLICATION FAILED for Queue {i+1}. Max attempts reached.")
-                            continue
+                            print(f"REPLICATION FAILED for Replica {i+1}. Max attempts reached.")
+                            break
                         else:
-                            print(f"REPLICATION FAILED for Queue {i+1}. Retrying...")
+                            print(f"REPLICATION FAILED for Replica {i+1}. Will retry with {attempt+ 1} out of {max_attempts}...")
+                            time.sleep(1)
                     
                     attempt += 1
                     
                 if not success:
-                    print(f"REPLICATION FAILED for Queue {i+1}. Max attempts reached.")
+                    print(f"Not successful in replicating to replica {i+1}.")
+                    # If the replica has not updated its log, do not clear the queue and continue to the next replica
                     continue
                 
             # Check if enough replicas have updated their logs
@@ -154,6 +158,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             else:
                 # What to do if enough replicas have not updated their logs
                 print(f"Majority of replicas have not updated their logs. Log update failed.")
+                
 
     def sendBytes(self, request, context):
         print("-----SERVER RECEIVED BYTES-----")
