@@ -19,6 +19,7 @@ enum Status {
     WAITING_FOR_LOCK_RELEASE = 44;
     NOT_LEADER = 24;
     LOG_UPDATED = 31;
+    SYSTEM_UNAVAILABLE = 57;
 
 }
 

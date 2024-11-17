@@ -79,6 +79,8 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             self.log_updated_reply_counter = 1
             # Deadline for replica to respond to the primary
             self.update_log_deadline = 2
+            # Boolean to determine if the system is available or not
+            self.system_available = True
 
             # replication setup
             port_numbers = port[-5:]
@@ -155,10 +157,13 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             # Check if enough replicas have updated their logs
             if self.log_updated_reply_counter > len(self.slaves) // 2:
                 print(f"Majority of replicas have updated their logs. Log updated successfully.")
+                self.system_available = True
             else:
                 # What to do if enough replicas have not updated their logs
                 print(f"Majority of replicas have not updated their logs. Log update failed.")
-                
+                self.system_available = False
+                print(f"--------------------------SYSTEM UNAVAILABLE--------------------------")
+
 
     def sendBytes(self, request, context):
         print("-----SERVER RECEIVED BYTES-----")
@@ -309,7 +314,15 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             request = lock_pb2.raft_request_args(term=self.term, candidate_id=self.port)
             try:
                 response = stub.heartbeat(request)
+                print(f"Heartbeat response from {peer}: {response}")
+                # If a replica comes back online (i.e. we get a response):
+                # call election
+                # choose leader
+                # Send bytes from leader to all replicas
+                # If enough replicas have successfully updated their logs from the leader, self.system_available = True
+                # Else, self.system_available stays at False and system stays unavailable
                 self.heartbeat_response(response)
+                self.system_available = True
             except grpc.RpcError:
                 print("Could not send hearbeat to", peer)
             
@@ -414,6 +427,9 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
 
     def process_request(self, request, context):
         '''Process request from client to see if it has been cached etc.'''
+        if self.system_available == False:
+            response = lock_pb2.Response(status=lock_pb2.Status.SYSTEM_UNAVAILABLE)
+            return response
         # Print metadata
         self.print_metadata(context)
         # Get request ID
@@ -468,6 +484,8 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         self.log_updated_reply_counter = 1
         # Deadline for replica to respond to the primary
         self.update_log_deadline = 2
+        # Boolean to determine if the system is available or not
+        self.system_available = True
 
         # replication setup
         port_numbers = port[-5:]
