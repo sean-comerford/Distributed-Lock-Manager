@@ -38,7 +38,10 @@ class State(Enum):
 class LockService(lock_pb2_grpc.LockServiceServicer):
 
     def __init__(self,port="127.0.0.1:56751",deadline=4,drop=False,load=False):
+        # Currently checks if load is true or false. If true, it loads the server state from the log. If false, initialises a fresh server state with default settings
+        print(f"Load is {load}")
         if(load):
+            print(f"SERVER LOADING FROM LOGS")
             self.logger = Logger(filepath="./filestore/"+str(port[-5:])+"/"+str(port[-5:])+".json")
             self.load_server_state_from_log( deadline=4)
         else:
@@ -596,6 +599,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         if self.lock_counter != request.lock_val or self.lock_owner == None:
             response = lock_pb2.Response(status=lock_pb2.Status.LOCK_EXPIRED)
             self.update_cache(request_id, response)
+            print(f"The lock counter is {self.lock_counter}. The request lock value is {request.lock_val}. The lock owner is {self.lock_owner}.")
             print(f"Client {request.client_id} has an expired lock")
             return response
         if  self.lock_owner != request.client_id:

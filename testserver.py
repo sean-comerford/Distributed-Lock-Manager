@@ -25,7 +25,7 @@ class LockServiceWrapper:
         self._lock_service = LockService(port="127.0.0.1:"+str(port))
     
     def client_init(self, request, context):
-        print("Wrapper: client_init called")
+        print(f"Wrapper: client_init called by client {request.client_id}")
         return self._lock_service.client_init(request, context)
 
     def client_close(self, request, context):
@@ -85,7 +85,7 @@ class LockServiceWrapper:
         return self._lock_service.heartbeat(request, context)
 
     def get_leader(self, request, context):
-        print("Wrapper: get_leader called")
+        print(f"Wrapper: get_leader called by client {request.client_id}")
         return self._lock_service.get_leader(request, context)      
     
 

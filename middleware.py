@@ -31,7 +31,7 @@ class RetryInterceptor(grpc.UnaryUnaryClientInterceptor):
         # Retry loop
         for attempt in range(self.max_attempts):
             if attempt == 0:
-                print(f"Initial attempt")
+                print(f"Initial attempt for request {request}")
             else:
                 print(f"Retry number {attempt} ")
 
