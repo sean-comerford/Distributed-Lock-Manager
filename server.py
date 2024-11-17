@@ -20,7 +20,7 @@ import os
 from enum import Enum
 from concurrent.futures import ThreadPoolExecutor
 
-
+import json
 
 
 timeout = 100
@@ -398,7 +398,6 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         print("Server Loading from logs")
         self.lock_owner, self.lock_counter, self.response_cache, self.client_counter, self.locked = self.logger.load_log()
         
-        self.lock_owner = None
         self.client_counter = 0
         self.lock = threading.Lock() #Mutual Exclusion on shared resources (self.locked, client_counter and lock_owner)
         self.condition = threading.Condition(self.lock) #Coordinate access to the lock by allowing threads (clients) to wait until lock availabel
@@ -438,18 +437,23 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         self.rebuild_files()
     
     def rebuild_files(self):
+        to_remove = []
         for key, value in self.response_cache.items():
             # Check if the value is a dictionary containing 'filename' and 'content'
             if isinstance(value, dict) and 'filename' in value and 'content' in value:
                 filename = value['filename']
                 content = value['content']
-                
+                to_remove.append(key)
                 # Write the content to the file
                 with open(self.folderpath+"/"+filename, 'a') as file:
                     file.write(content)
                 print(f"Appended content to {filename}.")
             else:
                 print(f"Skipping entry with key {key} as it does not contain a file definition.")
+        for key in to_remove:
+                del self.response_cache[key[:-2]]
+                self.response_cache[key[:-2]] = self.response_cache.pop(key)
+        self.log_state()
 
 
     def get_leader(self,request,context):
@@ -534,8 +538,6 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
                 for queue in self.queues:
                     queue.append(self.cs_cache)
             print(self.response_cache)
-            for append_request_id, response in self.cs_cache.items():
-                self.update_cache(append_request_id, response)
             self.log_state()
             if self.role==State.LEADER:
                 self.RPC_sendBytes()
@@ -609,6 +611,11 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         # Store request in Critical section cache
         self.initialise_cs_cache(request_id, request.filename, request.content)
         print(f"Append operation cached in cs cache")
+        print(request.filename,request.content,self.folderpath + "/" + self.port[-5:]+".json")
+        self.update_cache(request_id+"-a",(request.filename, request.content.decode("utf-8")))
+        print(self.response_cache)
+        self.log_state()
+        print("REAL LOG UPDATED WITH APPEND")
         # Return a message to the client to release the lock to confirm the append
         # Once server receives lock_release from client, it will perform all the appends in the critical section cache
         # Then the critical section cache will be cleared, ready for the next critical section

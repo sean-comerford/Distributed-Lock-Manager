@@ -321,7 +321,6 @@ def test3a():
     open("./filestore/56751/file_1.txt", 'w').close()
     p = subprocess.Popen (["python", "server.py","-p","56751","-l","1"])
     time.sleep(1)
-    client.RPC_init()
     client.RPC_lock_acquire()
     client.RPC_append_file("file_1.txt", "1")
     client.RPC_lock_release()
@@ -330,6 +329,53 @@ def test3a():
     assert open("./filestore/56751/file_1.txt", 'r').read() == "AA1"
     print("TEST 3a PASSED")
 
+def test3b():
+    
+    open("./filestore/56751/file_1.txt", 'w').close()
+    
+    def client1_behaviour():
+        time.sleep(1)
+        client= LockClient(interceptor=RetryInterceptor())
+        client.RPC_init()
+        client.RPC_lock_acquire()
+        client.RPC_append_file("file_1.txt", "A")
+        client.RPC_lock_release()
+        
+
+        
+    def client2_behaviour():
+        p = subprocess.Popen (["python", "testserver.py","-p","56751"])
+        time.sleep(1)
+        client= LockClient(interceptor=RetryInterceptor())
+        # Small pause to make sure this is initialised as client 2
+        time.sleep(1.1)
+        client.RPC_init()
+        # Small pause to ensure client 1 gets the lock first, as described in test 2b
+        time.sleep(0.1)
+        client.RPC_lock_acquire()
+        
+        client.RPC_append_file("file_1.txt", "B")
+        p.terminate()
+        
+        client.RPC_append_file("file_1.txt", "B")
+        open("./filestore/56751/file_1.txt", 'w').close()
+        p = subprocess.Popen (["python", "server.py","-p","56751","-l","1"])
+        time.sleep(1)
+        
+
+        
+        
+    thread1 = threading.Thread(target=client1_behaviour)
+    thread2 = threading.Thread(target=client2_behaviour)
+
+    # Start the threads
+    thread1.start()
+    thread2.start()
+    thread1.join()
+    thread2.join()
+    
+    assert open("./filestore/56751/file_1.txt", 'r').read() == "BBAA"
+    print("TEST 2b PASSED")
 
 testA()
 testB()
@@ -338,3 +384,4 @@ testD()
 test2a()
 test2b()
 test3a()
+# test3b()

@@ -10,10 +10,16 @@ class Logger:
             """Serializes a tuple response (e.g., filename and content)."""
             if response is None:
                 return "none"
+            if isinstance(response, int):
+                return response
             if len(response) == 2:
-                filename, content = response
+                try:
+                    filename, content = response
+                except (UnicodeDecodeError, AttributeError):
+                    filename,content = response
+                
                 # Decode bytes to a string
-                return {'filename': filename, 'content': content.decode('utf-8')}
+                return {'filename': filename, 'content': content}
             return None  # Handle invalid or empty tuples
 
         # if response is none return none, if response response.status, if tuple serialize it
@@ -29,6 +35,7 @@ class Logger:
 
 
     def save_log(self, lock_owner, lock_counter, cache, counter, locked):
+        print(cache)
         state = {
             "lock_owner": lock_owner,
             "lock_counter": lock_counter,
