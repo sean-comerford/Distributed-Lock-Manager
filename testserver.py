@@ -46,7 +46,7 @@ class LockServiceWrapper:
         return response
 
     def lock_release(self, request, context):
-        print("Wrapper: lock_release called")
+        print(f"Wrapper: lock_release called by client {request.client_id}")
         if self.drop == 3:
                 print(f"\n\n\nSIMULATED PACKET DELAY {request.client_id}.")
                 self.drop = False

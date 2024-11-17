@@ -75,9 +75,10 @@ class RetryInterceptor(grpc.UnaryUnaryClientInterceptor):
                 else:
                     print(f"Unexpected response from the server: {response}")
                 
-                # If the response status is WORKING_ON_IT, sleep for 5 seconds and try again
-                if actual_response.status == lock_pb2.Status.WORKING_ON_IT:
-                    print(f"Server is still working on request, delaying before retrying")
+                # If the response status is WORKING_ON_IT, or SYSTEM_UNAVAILABLE, sleep for 2 seconds and try again
+                if actual_response.status == lock_pb2.Status.WORKING_ON_IT or actual_response.status == lock_pb2.Status.SYSTEM_UNAVAILABLE:
+                    print(f"Server is either working on request or unavailable, delaying before retrying")
+                    print(f"Response from server is {actual_response}")
                     time.sleep(2)
                     # Skip this iteration and move to the next iteration.
                     if attempt < self.max_attempts - 1:
