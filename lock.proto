@@ -20,7 +20,7 @@ enum Status {
     NOT_LEADER = 24;
     LOG_UPDATED = 31;
     SYSTEM_UNAVAILABLE = 57;
-
+    LOGS_NEED_UPDATE = 25;
 }
 
 // response struct, adjust or add any fields you want
@@ -47,7 +47,6 @@ message Int {
     int32 rc = 1;
 }
 
-
 // New message for sending raw bytes
 message ByteMessage {
     bytes data = 1;  // Raw byte data to send
@@ -57,6 +56,7 @@ message ByteMessage {
 message raft_heartbeat_args {
     int32 term = 1;
     bool success = 2;
+    Status status = 3;
 } 
 
 message raft_request_args {
@@ -68,6 +68,7 @@ message raft_request_args {
 message raft_response_args {
     bool vote_granted = 1;
     int32 term = 2;
+    int32 last_log_index = 3;
 }
 
 service LockService {
