@@ -145,7 +145,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
                             break
                         else:
                             print(f"REPLICATION FAILED for Replica {i+1}. Will retry with {attempt+ 1} out of {max_attempts}...")
-                            time.sleep(1)
+                            time.sleep(0.5)
                     
                     attempt += 1
                     
