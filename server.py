@@ -314,13 +314,6 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             request = lock_pb2.raft_request_args(term=self.term, candidate_id=self.port)
             try:
                 response = stub.heartbeat(request)
-                print(f"Heartbeat response from {peer}: {response}")
-                # If a replica comes back online (i.e. we get a response):
-                # call election
-                # choose leader
-                # Send bytes from leader to all replicas
-                # If enough replicas have successfully updated their logs from the leader, self.system_available = True
-                # Else, self.system_available stays at False and system stays unavailable
                 self.heartbeat_response(response)
                 self.system_available = True
             except grpc.RpcError:

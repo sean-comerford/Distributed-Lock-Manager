@@ -304,8 +304,12 @@ def test2b():
 
 # test 3)a) single server fail, lock is free
 def test3a():
+    # For testing purposes, make sure the file is empty
+    open("./filestore/56751/file_1.txt", 'w').close()
     time.sleep(1)
     p = subprocess.Popen (["python", "server.py","-p","56751"])
+    p2 = subprocess.Popen(["python", "server.py","-p","56752"])
+    p3 = subprocess.Popen(["python", "server.py","-p","56753"])
     time.sleep(1)
     print("hello")
     client= LockClient(interceptor=RetryInterceptor())
@@ -317,20 +321,27 @@ def test3a():
     time.sleep(1)
     p.terminate()
     # Server files now automatically wiped when server is killed
-    p = subprocess.Popen (["python", "server.py","-p","56751","-l","1"])
+    #p = subprocess.Popen (["python", "server.py","-p","56751","-l","1"])
+    p = subprocess.Popen (["python", "server.py","-p","56751"])
     time.sleep(1)
     client.RPC_lock_acquire()
     client.RPC_append_file("file_1.txt", "1")
     client.RPC_lock_release()
-    p.terminate()   
+    p.terminate() 
+    p2.terminate()
+    p3.terminate()  
     
     assert open("./filestore/56751/file_1.txt", 'r').read() == "AA1"
     print("TEST 3a PASSED")
 
 def test3b():
+    # For testing purposes, make sure the file is empty
+    open("./filestore/56751/file_1.txt", 'w').close()
     time.sleep(1)
     global p
     p = subprocess.Popen (["python", "server.py","-p","56751"])
+    p2 = subprocess.Popen(["python", "server.py","-p","56752"])
+    p3 = subprocess.Popen(["python", "server.py","-p","56753"])
     time.sleep(1)
     print("hello")
     
@@ -384,10 +395,13 @@ def test3b():
     thread1.join()
     thread2.join()
     p.terminate()
+    p2.terminate()
+    p3.terminate()
     
     assert open("./filestore/56751/file_1.txt", 'r').read() == "ABBA"
     print("TEST 3b PASSED")
 
+'''
 def test4a():
     global p
     global p2
@@ -458,16 +472,57 @@ def test4a():
     print("TEST 4a PASSED")
 
 
+    def test4e():
+        global p
+        global p2
+        global p3
+        p = subprocess.Popen (["python", "testserver.py","-p","56751"])
+        p2 = subprocess.Popen(["python", "server.py","-p","56752"])
+        p3 = subprocess.Popen(["python", "server.py","-p","56753"])
+        # Allow time for servers to start
+        time.sleep(1)
+        print(f"Servers have started")       
+
+    def client1_behaviour():
+        global p
+        global p2
+        global p3
+        client= LockClient(interceptor=RetryInterceptor())
+
+    def client2_behaviour():
+        global p
+        global p2
+        global p3
+        client= LockClient(interceptor=RetryInterceptor())
+        # Small pause to make sure this is initialised as client 2
+        time.sleep(0.1)
+        client.RPC_init()
+
+
+    thread1 = threading.Thread(target=client1_behaviour)
+    thread2 = threading.Thread(target=client2_behaviour)
+
+    # Start the threads
+    thread1.start()
+    thread2.start()
+    thread1.join()
+    thread2.join()
+    p.terminate()
+    p2.terminate()
+    p3.terminate()
+
+print(f"Test 4e has finished")
+
+'''
 
 
 
-
-
-# testA()
-# testB()
-# testC()
-# testD()
-# test2a()
-# test2b()
-# test3a()
+testA()
+testB()
+testC()
+testD()
+test2a()
+test2b()
+test3a()
 test3b()
+#test4e()
