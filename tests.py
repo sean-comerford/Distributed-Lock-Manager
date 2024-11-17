@@ -304,8 +304,6 @@ def test2b():
 
 # test 3)a) single server fail, lock is free
 def test3a():
-    open("./filestore/56751/file_1.txt", 'w').close()
-    open("./filestore/56751/56751.json", 'w').close()
     time.sleep(1)
     p = subprocess.Popen (["python", "server.py","-p","56751"])
     time.sleep(1)
@@ -318,7 +316,7 @@ def test3a():
     client.RPC_lock_release()
     time.sleep(1)
     p.terminate()
-    open("./filestore/56751/file_1.txt", 'w').close()
+    # Server files now automatically wiped when server is killed
     p = subprocess.Popen (["python", "server.py","-p","56751","-l","1"])
     time.sleep(1)
     client.RPC_lock_acquire()
@@ -330,8 +328,6 @@ def test3a():
     print("TEST 3a PASSED")
 
 def test3b():
-    open("./filestore/56751/file_1.txt", 'w').close()
-    open("./filestore/56751/56751.json", 'w').close()
     time.sleep(1)
     global p
     p = subprocess.Popen (["python", "server.py","-p","56751"])
@@ -371,8 +367,7 @@ def test3b():
         time.sleep(0.1)
         print(f"SERVER ABOUT TO DIE_________________________________________")
         p.terminate()
-        # Wipe files after a server has died.
-        open("./filestore/56751/file_1.txt", 'w').close()
+        # Server txt files now automatically wiped when server is killed
         p = subprocess.Popen (["python", "server.py","-p","56751","-l","1"])
         # Allow time for server to restart
         time.sleep(1)
@@ -393,11 +388,86 @@ def test3b():
     assert open("./filestore/56751/file_1.txt", 'r').read() == "ABBA"
     print("TEST 3b PASSED")
 
-testA()
-testB()
-testC()
-testD()
-test2a()
-test2b()
-test3a()
+def test4a():
+    global p
+    global p2
+    global p3
+    p = subprocess.Popen (["python", "testserver.py","-p","56751"])
+    p2 = subprocess.Popen(["python", "server.py","-p","56752"])
+    p3 = subprocess.Popen(["python", "server.py","-p","56753"])
+    # Allow time for servers to start
+    time.sleep(1)
+    print(f"Servers have started")
+
+    def client1_behaviour():
+        global p
+        global p2
+        global p3
+        client= LockClient(interceptor=RetryInterceptor())
+
+    def client2_behaviour():
+        global p
+        global p2
+        global p3
+        client= LockClient(interceptor=RetryInterceptor())
+        # Small pause to make sure this is initialised as client 2
+        time.sleep(0.1)
+        client.RPC_init()
+
+
+    thread1 = threading.Thread(target=client1_behaviour)
+    thread2 = threading.Thread(target=client2_behaviour)
+
+    # Start the threads
+    thread1.start()
+    thread2.start()
+    thread1.join()
+    thread2.join()
+    p.terminate()
+    p2.terminate()
+    p3.terminate()
+
+
+    content_56751_file1 = open("./filestore/56751/file_1.txt", 'r').read()
+    assert content_56751_file1 == "AB" or content_56751_file1 == "BA"
+
+    content_56751_file2 = open("./filestore/56751/file_2.txt", 'r').read()
+    assert content_56751_file2 == "AB" or content_56751_file2 == "BA"
+
+    content_56751_file3 = open("./filestore/56751/file_3.txt", 'r').read()
+    assert content_56751_file3 == "AB" or content_56751_file3 == "BA"
+
+    content_56752_file1 = open("./filestore/56752/file_1.txt", 'r').read()
+    assert content_56752_file1 == "AB" or content_56752_file1 == "BA"
+
+    content_56752_file2 = open("./filestore/56752/file_2.txt", 'r').read()
+    assert content_56752_file2 == "AB" or content_56752_file2 == "BA"
+
+    content_56752_file3 = open("./filestore/56752/file_3.txt", 'r').read()
+    assert content_56752_file3 == "AB" or content_56752_file3 == "BA"
+
+    content_56753_file1 = open("./filestore/56753/file_1.txt", 'r').read()
+    assert content_56753_file1 == "AB" or content_56753_file1 == "BA"
+
+    content_56753_file2 = open("./filestore/56753/file_2.txt", 'r').read()
+    assert content_56753_file2 == "AB" or content_56753_file2 == "BA"
+
+    content_56753_file3 = open("./filestore/56753/file_3.txt", 'r').read()
+    assert content_56753_file3 == "AB" or content_56753_file3 == "BA"
+
+    print("TEST 4a PASSED")
+
+
+
+
+
+
+
+# testA()
+# testB()
+# testC()
+# testD()
+# test2a()
+# test2b()
+# test3a()
 test3b()

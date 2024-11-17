@@ -18,6 +18,7 @@ enum Status {
     LOCK_EXPIRED = 23;
     WAITING_FOR_LOCK_RELEASE = 44;
     NOT_LEADER = 24;
+    LOG_UPDATED = 31;
 
 }
 
