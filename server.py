@@ -15,6 +15,7 @@ import sys
 from datetime import datetime, timedelta
 import pickle 
 import uuid
+import glob
 import os
 
 from enum import Enum
@@ -39,6 +40,16 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
 
     def __init__(self,port="127.0.0.1:56751",deadline=4,drop=False,load=False):
         if(load):
+            # Wipe all files, as we assume they are lost on a server crash and must be rebuilt from the persistant log
+            for subdir in os.listdir("./filestore"):
+                subdir_path = os.path.join("./filestore", subdir)
+                if os.path.isdir(subdir_path):
+                    txt_files = glob.glob(os.path.join(subdir_path, "*.txt"))
+                    for txt_file in txt_files:
+                        os.remove(txt_file)
+                        print(f"Deleted {txt_file} after server crash")
+            print(f"All files deleted after server crash")
+            open("./filestore/56751/file_1.txt", 'w').close()
             self.logger = Logger(filepath="./filestore/"+str(port[-5:])+"/"+str(port[-5:])+".json")
             self.load_server_state_from_log( deadline=4)
         else:
@@ -63,6 +74,13 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             self.deadline = timedelta(seconds=deadline)
             self.start_cache_clear_thread()
             self.cs_cache = {}
+            # Counter to keep track of all the replicas that have updated their log to match the primary
+            # Set to 1 as the primary is always up to date with its own log
+            self.log_updated_reply_counter = 1
+            # Deadline for replica to respond to the primary
+            self.update_log_deadline = 2
+            # Boolean to determine if the system is available or not
+            self.system_available = True
 
             # replication setup
             port_numbers = port[-5:]
@@ -87,30 +105,65 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
 
     def RPC_sendBytes(self):
         # Serialize the queue data to bytes
+        self.log_updated_reply_counter = 1
         if self.role==State.LEADER:
+            # There is one self.queues list for each replica
+            # Iterate through each of the replicas and their queue
             for i, queue in enumerate(self.queues):
                 print(f"Queue {i}")
                 if len(queue) == 0:
                     print(f"Queue {i+1} is empty, skipping...")
-                    continue
+                    data = ""
+                    
                 
                 data = pickle.dumps(list(queue))  # Serialize the queue
                 request = lock_pb2.ByteMessage(data=data, lock_val=self.lock_counter)  # Use queue index as client_id for tracking
                 
                 # Send serialized data to the corresponding slave
                 slave_stub = self.slaves[i]  # Get the stub for the corresponding slave
-                try:
-                    response = slave_stub.sendBytes(request)
-                except grpc._channel._InactiveRpcError as e:
-                    print(f"REPLICATION FAILED for Queue {i+1}")
+                attempt = 0
+                success = False
+                max_attempts = 5
+                
+                while attempt < max_attempts + 1:
+                    try:
+                        response = slave_stub.sendBytes(request)
+
+                        # Check response from replica server
+                        if response.status == lock_pb2.Status.LOG_UPDATED:
+                            self.log_updated_reply_counter += 1
+                            print(f"REPLICATION SUCCESSFUL for replica {i+1}")
+                            queue.clear()
+                            success = True
+                            break
+                        else:
+                            print(f"REPLICATION FAILED for Replica {i+1}, Will retry with {attempt+ 1} out of {max_attempts}...")
+
+                    except grpc._channel._InactiveRpcError as e:
+                        if attempt == max_attempts - 1:
+                            print(f"REPLICATION FAILED for Replica {i+1}. Max attempts reached.")
+                            break
+                        else:
+                            print(f"REPLICATION FAILED for Replica {i+1}. Will retry with {attempt+ 1} out of {max_attempts}...")
+                            time.sleep(0.5)
+                    
+                    attempt += 1
+                    
+                if not success:
+                    print(f"Not successful in replicating to replica {i+1}.")
+                    # If the replica has not updated its log, do not clear the queue and continue to the next replica
                     continue
                 
-                # Check response status
-                if response.status == lock_pb2.Status.SUCCESS:
-                    print(f"REPLICATION SUCCESSFUL for Queue {i+1}")
-                    queue.clear()  # Clear the queue after successful replication
-                else:
-                    print(f"REPLICATION FAILED for Queue {i+1}")
+            # Check if enough replicas have updated their logs
+            if self.log_updated_reply_counter > len(self.slaves) // 2:
+                print(f"Majority of replicas have updated their logs. Log updated successfully.")
+                self.system_available = True
+            else:
+                # What to do if enough replicas have not updated their logs
+                print(f"Majority of replicas have not updated their logs. Log update failed.")
+                self.system_available = False
+                print(f"--------------------------SYSTEM UNAVAILABLE--------------------------")
+
 
     def sendBytes(self, request, context):
         print("-----SERVER RECEIVED BYTES-----")
@@ -122,24 +175,29 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             self.lock_counter = request.lock_val
             # Print each entry in the deserialized data
             for cs in received_data:
-                for append_request_id, (filename, content) in cs.items():
-                    with open(self.folderpath+"/"+filename, 'ab') as file:
-                        file.write(content)
-                        self.update_cache(append_request_id,(filename,content))
-                        print(f"Appended {content} to file {filename}")
-                self.log_state()
+                if cs != "":
+                    for append_request_id, (filename, content) in cs.items():
+                        if type(content) == bytes:
+                            content = str(content, 'utf-8')
+                        print(f"Appending content TYPE {type(content)} to file {filename}")    
+                        with open(self.folderpath+"/"+filename, 'a') as file:
+                            file.write(content)
+                            self.update_cache(append_request_id,(filename,content))
+                            print(f"Appended {content} to file {filename}")
+                else:
+                    continue
+            self.log_state()
+            
+            print(f"Replica successfully updated log")
+            response = lock_pb2.Response(status=lock_pb2.Status.LOG_UPDATED)
+            return response
 
                     
         
         except Exception as e:
             # Handle errors during deserialization
-            print("Error while deserializing data:", str(e))
-        
-        print("-------------------------------")
-        
-        # Send success response
-        response = lock_pb2.Response(status=lock_pb2.Status.SUCCESS, id_num=0)
-        return response
+            print("Replica error when updating log:", str(e))
+    
 
     def init_raft(self, port):
         self.port = port
@@ -259,7 +317,9 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             request = lock_pb2.raft_request_args(term=self.term, candidate_id=self.port)
             try:
                 response = stub.heartbeat(request)
+                # if we get response from server that was previously dead, RPC_sendBytes
                 self.heartbeat_response(response)
+                self.system_available = True
             except grpc.RpcError:
                 print("Could not send hearbeat to", peer)
             
@@ -307,7 +367,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
                 # Check how long has elapsed since the last action
                 time_elapsed = datetime.now() - self.last_action_time 
                 if time_elapsed > self.deadline:
-                    self._lock_release()
+                    self._lock_release(lock_timeout=True)
                     print("LOCK OWNER OVER DEADLINE, REMOVING LOCK")
             # Check every second if the lock owner has been over the deadline
             time.sleep(1)
@@ -364,6 +424,9 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
 
     def process_request(self, request, context):
         '''Process request from client to see if it has been cached etc.'''
+        if self.system_available == False:
+            response = lock_pb2.Response(status=lock_pb2.Status.SYSTEM_UNAVAILABLE)
+            return response
         # Print metadata
         self.print_metadata(context)
         # Get request ID
@@ -415,6 +478,11 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         self.deadline = timedelta(seconds=deadline)
         self.start_cache_clear_thread()
         self.cs_cache = {}
+        self.log_updated_reply_counter = 1
+        # Deadline for replica to respond to the primary
+        self.update_log_deadline = 2
+        # Boolean to determine if the system is available or not
+        self.system_available = True
 
         # replication setup
         port_numbers = port[-5:]
@@ -525,7 +593,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             
             return response
         
-    def _lock_release(self,):
+    def _lock_release(self, lock_timeout=False):
         # if critical section not finished drop it
         # check change to files and queues complete
         with self.condition:
@@ -534,13 +602,15 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             print(f"Lock owner has been set to None")
             self.last_action_time = None
             self.condition.notify_all()
-            if self.role==State.LEADER:
+            if self.role==State.LEADER and lock_timeout == False:
                 for queue in self.queues:
                     queue.append(self.cs_cache)
-            print(self.response_cache)
+            #print(self.response_cache)
             self.log_state()
             if self.role==State.LEADER:
+                print(f"Send bytes being called after lock release")
                 self.RPC_sendBytes()
+                print(f"Send bytes has been called after a lock release")
             self.cs_cache.clear()
         
     def lock_release(self, request, context):
@@ -613,7 +683,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         print(f"Append operation cached in cs cache")
         print(request.filename,request.content,self.folderpath + "/" + self.port[-5:]+".json")
         self.update_cache(request_id+"-a",(request.filename, request.content.decode("utf-8")))
-        print(self.response_cache)
+        #print(self.response_cache)
         self.log_state()
         print("REAL LOG UPDATED WITH APPEND")
         # Return a message to the client to release the lock to confirm the append

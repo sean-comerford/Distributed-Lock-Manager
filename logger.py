@@ -35,7 +35,7 @@ class Logger:
 
 
     def save_log(self, lock_owner, lock_counter, cache, counter, locked):
-        print(cache)
+        #print(cache)
         state = {
             "lock_owner": lock_owner,
             "lock_counter": lock_counter,
@@ -44,6 +44,7 @@ class Logger:
             "cache": self.serialize_cache(cache)
         }
         with open(self.filepath, "w") as f:
+            #print(f"-------------STATE: {state}")
             json.dump(state, f)
 
     def load_log(self):
