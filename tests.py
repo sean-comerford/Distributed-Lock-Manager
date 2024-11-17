@@ -330,13 +330,25 @@ def test3a():
     print("TEST 3a PASSED")
 
 def test3b():
-    
     open("./filestore/56751/file_1.txt", 'w').close()
+    open("./filestore/56751/56751.json", 'w').close()
+    time.sleep(1)
+    global p
+    p = subprocess.Popen (["python", "server.py","-p","56751"])
+    time.sleep(1)
+    print("hello")
     
     def client1_behaviour():
-        time.sleep(1)
         client= LockClient(interceptor=RetryInterceptor())
         client.RPC_init()
+        print(f"Client 1 has been given the client ID: {client.client_id}")
+        client.RPC_lock_acquire()
+        # Allow time for client 2 to ask for the lock
+        time.sleep(0.5)
+        client.RPC_append_file("file_1.txt", "A")
+        client.RPC_lock_release()
+        # Sleep to allow client 2 operations
+        time.sleep(1.5)
         client.RPC_lock_acquire()
         client.RPC_append_file("file_1.txt", "A")
         client.RPC_lock_release()
@@ -344,26 +356,29 @@ def test3b():
 
         
     def client2_behaviour():
-        p = subprocess.Popen (["python", "testserver.py","-p","56751"])
-        time.sleep(1)
+        global p
         client= LockClient(interceptor=RetryInterceptor())
         # Small pause to make sure this is initialised as client 2
-        time.sleep(1.1)
+        time.sleep(0.1)
         client.RPC_init()
+        print(f"Client 2 has been given the client ID: {client.client_id}")
         # Small pause to ensure client 1 gets the lock first, as described in test 2b
         time.sleep(0.1)
         client.RPC_lock_acquire()
         
         client.RPC_append_file("file_1.txt", "B")
+        # Allow time for log to be updated before crashing
+        time.sleep(0.1)
+        print(f"SERVER ABOUT TO DIE_________________________________________")
         p.terminate()
-        
-        client.RPC_append_file("file_1.txt", "B")
+        # Wipe files after a server has died.
         open("./filestore/56751/file_1.txt", 'w').close()
         p = subprocess.Popen (["python", "server.py","-p","56751","-l","1"])
+        # Allow time for server to restart
         time.sleep(1)
-        
-
-        
+        print(f"SERVER HAS COME BACK TO LIFE _____________________________")
+        client.RPC_append_file("file_1.txt", "B")
+        client.RPC_lock_release()
         
     thread1 = threading.Thread(target=client1_behaviour)
     thread2 = threading.Thread(target=client2_behaviour)
@@ -373,9 +388,10 @@ def test3b():
     thread2.start()
     thread1.join()
     thread2.join()
+    p.terminate()
     
-    assert open("./filestore/56751/file_1.txt", 'r').read() == "BBAA"
-    print("TEST 2b PASSED")
+    assert open("./filestore/56751/file_1.txt", 'r').read() == "ABBA"
+    print("TEST 3b PASSED")
 
 testA()
 testB()
@@ -384,4 +400,4 @@ testD()
 test2a()
 test2b()
 test3a()
-# test3b()
+test3b()
