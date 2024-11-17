@@ -177,13 +177,16 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             for cs in received_data:
                 if cs != "":
                     for append_request_id, (filename, content) in cs.items():
-                        with open(self.folderpath+"/"+filename, 'ab') as file:
+                        if type(content) == bytes:
+                            content = str(content, 'utf-8')
+                        print(f"Appending content TYPE {type(content)} to file {filename}")    
+                        with open(self.folderpath+"/"+filename, 'a') as file:
                             file.write(content)
                             self.update_cache(append_request_id,(filename,content))
                             print(f"Appended {content} to file {filename}")
-                    self.log_state()
                 else:
                     continue
+            self.log_state()
             
             print(f"Replica successfully updated log")
             response = lock_pb2.Response(status=lock_pb2.Status.LOG_UPDATED)
@@ -314,6 +317,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             request = lock_pb2.raft_request_args(term=self.term, candidate_id=self.port)
             try:
                 response = stub.heartbeat(request)
+                # if we get response from server that was previously dead, RPC_sendBytes
                 self.heartbeat_response(response)
                 self.system_available = True
             except grpc.RpcError:
@@ -601,7 +605,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             if self.role==State.LEADER and lock_timeout == False:
                 for queue in self.queues:
                     queue.append(self.cs_cache)
-            print(self.response_cache)
+            #print(self.response_cache)
             self.log_state()
             if self.role==State.LEADER:
                 print(f"Send bytes being called after lock release")
@@ -679,7 +683,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         print(f"Append operation cached in cs cache")
         print(request.filename,request.content,self.folderpath + "/" + self.port[-5:]+".json")
         self.update_cache(request_id+"-a",(request.filename, request.content.decode("utf-8")))
-        print(self.response_cache)
+        #print(self.response_cache)
         self.log_state()
         print("REAL LOG UPDATED WITH APPEND")
         # Return a message to the client to release the lock to confirm the append

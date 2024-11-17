@@ -401,7 +401,7 @@ def test3b():
     assert open("./filestore/56751/file_1.txt", 'r').read() == "ABBA"
     print("TEST 3b PASSED")
 
-'''
+
 def test4a():
     global p
     global p2
@@ -472,23 +472,42 @@ def test4a():
     print("TEST 4a PASSED")
 
 
-    def test4e():
-        global p
-        global p2
-        global p3
-        p = subprocess.Popen (["python", "testserver.py","-p","56751"])
-        p2 = subprocess.Popen(["python", "server.py","-p","56752"])
-        p3 = subprocess.Popen(["python", "server.py","-p","56753"])
-        # Allow time for servers to start
-        time.sleep(1)
-        print(f"Servers have started")       
+def test4e():
+    global p
+    global p2
+    global p3
+    p = subprocess.Popen (["python", "testserver.py","-p","56751"])
+    p2 = subprocess.Popen(["python", "server.py","-p","56752"])
+    p3 = subprocess.Popen(["python", "server.py","-p","56753"])
+    # Allow time for servers to start
+    time.sleep(3)
+    print(f"Servers have started")       
 
     def client1_behaviour():
         global p
         global p2
         global p3
         client= LockClient(interceptor=RetryInterceptor())
+        client.RPC_init()
+        client.RPC_lock_acquire()
+        client.RPC_append_file("file_1.txt", "A")
+        client.RPC_append_file("file_1.txt", "A")
+        client.RPC_append_file("file_2.txt", "A")
+        client.RPC_append_file("file_2.txt", "A")
+        client.RPC_append_file("file_3.txt", "A") 
+        p2.terminate()
+        client.RPC_append_file("file_3.txt", "A")
+        client.RPC_append_file("file_4.txt", "A")
+        client.RPC_append_file("file_4.txt", "A")
+        client.RPC_append_file("file_5.txt", "A")
+        client.RPC_append_file("file_5.txt", "A")
+        print(f"---------------------LOCK RELEASE ABOUT TO BE CALLED BY CLIENT 1---------------------")
+        client.RPC_lock_release()
+        p2 = subprocess.Popen(["python", "server.py","-p","56752"])
+        # Allow time for server to restart
+        time.sleep(1)
 
+    '''
     def client2_behaviour():
         global p
         global p2
@@ -497,23 +516,68 @@ def test4a():
         # Small pause to make sure this is initialised as client 2
         time.sleep(0.1)
         client.RPC_init()
+        client.RPC_lock_acquire()
+        client.RPC_append_file("file_1.txt", "B")
+        client.RPC_append_file("file_1.txt", "B")
+        client.RPC_append_file("file_2.txt", "B")
+        client.RPC_append_file("file_2.txt", "B")
+        client.RPC_append_file("file_3.txt", "B")
+        print(f"---------------------TWO SERVERS ABOUT TO CRASH---------------------")
+        p2.terminate()
+        p3.terminate()
+        client.RPC_append_file("file_3.txt", "B")
+        client.RPC_append_file("file_4.txt", "B")
+        client.RPC_append_file("file_4.txt", "B")
+        client.RPC_append_file("file_5.txt", "B")
+        client.RPC_append_file("file_5.txt", "B")
+        client.RPC_lock_release()
 
 
+    def client3_behaviour():
+        global p
+        global p2
+        global p3
+        client= LockClient(interceptor=RetryInterceptor())
+        # Small pause to make sure this is initialised as client 3
+        time.sleep(0.2)
+        client.RPC_init()
+        # Wait to let two servers crash on thread 2
+        time.sleep(3)
+        # Revive one server
+        print(f"---------------------ONE SERVER ABOUT TO REVIVE---------------------")
+        p2 = subprocess.Popen(["python", "server.py","-p","56752"])
+        # Wait to let the server revive
+        time.sleep(1)
+        client.RPC_lock_acquire()
+        client.RPC_append_file("file_1.txt", "C")
+        client.RPC_append_file("file_1.txt", "C")
+        client.RPC_append_file("file_2.txt", "C")
+        client.RPC_append_file("file_2.txt", "C")
+        client.RPC_append_file("file_3.txt", "C")
+        client.RPC_append_file("file_3.txt", "C")
+        client.RPC_append_file("file_4.txt", "C")
+        client.RPC_append_file("file_4.txt", "C")
+        client.RPC_append_file("file_5.txt", "C")
+        client.RPC_append_file("file_5.txt", "C")
+        client.RPC_lock_release()
+    '''
     thread1 = threading.Thread(target=client1_behaviour)
-    thread2 = threading.Thread(target=client2_behaviour)
+    #thread2 = threading.Thread(target=client2_behaviour)
+    #thread3 = threading.Thread(target=client3_behaviour)
 
     # Start the threads
     thread1.start()
-    thread2.start()
+    #thread2.start()
+    #thread3.start()
     thread1.join()
-    thread2.join()
+    #thread2.join()
+    #thread3.join()
     p.terminate()
     p2.terminate()
     p3.terminate()
 
-print(f"Test 4e has finished")
+    print(f"Test 4e has finished")
 
-'''
 
 
 
@@ -525,4 +589,5 @@ test2a()
 test2b()
 test3a()
 test3b()
-#test4e()
+# test4e()
+
