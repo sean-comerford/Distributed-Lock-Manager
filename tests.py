@@ -347,8 +347,8 @@ def test3b():
         time.sleep(0.5)
         client.RPC_append_file("file_1.txt", "A")
         client.RPC_lock_release()
-        # Sleep to allow client 2 operations
-        time.sleep(1.5)
+        # Sleep to allow client 2 to ask for the lock
+        time.sleep(0.2)
         client.RPC_lock_acquire()
         client.RPC_append_file("file_1.txt", "A")
         client.RPC_lock_release()
