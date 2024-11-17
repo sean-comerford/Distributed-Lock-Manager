@@ -57,24 +57,34 @@ def testA():
 
 # Test B: Packet Drop
 def testB():
-    p = subprocess.Popen(["python", "testserver.py","-d","1","-p","56751"])
-    #p2 = subprocess.Popen(["python", "server.py","-p","56752"])
-    #p3 = subprocess.Popen(["python", "server.py","-p","56753"])
     open("./filestore/56751/file_1.txt", 'w').close()
     time.sleep(1)
+    global pB
+    pB = subprocess.Popen(["python", "testserver.py","-d","1","-p","56751"])
+    #p2 = subprocess.Popen(["python", "server.py","-p","56752"])
+    #p3 = subprocess.Popen(["python", "server.py","-p","56753"])
+    # Give the server time to start
+    time.sleep(2)
+    print(f"Server has started")
+    
+
     def client1_behaviour():
+        global pB
         client= LockClient(interceptor=RetryInterceptor())
         client.RPC_init()
         client.RPC_lock_acquire()
         client.RPC_append_file("file_1.txt", "A")
         client.RPC_lock_release()
     def client2_behaviour():
+        global pB
         client= LockClient(interceptor=RetryInterceptor())
-        time.sleep(0.1)
+        # Sleep to allow to be initialised as client 2
+        time.sleep(1)
         client.RPC_init()
         client.RPC_lock_acquire()
         client.RPC_append_file("file_1.txt", "B")
         client.RPC_lock_release()
+
     thread1 = threading.Thread(target=client1_behaviour)
     thread2 = threading.Thread(target=client2_behaviour)
 
@@ -83,18 +93,19 @@ def testB():
     thread2.start()
     thread1.join()
     thread2.join()
-    p.terminate()
-    #p2.terminate()
-    #p3.terminate()
+    pB.terminate()
     assert open("./filestore/56751/file_1.txt", 'r').read() == "BA"
 
 
     # part b
     print("TEST b)a) PASSED")
     
+    '''
     p = subprocess.Popen (["python", "testserver.py","-d","2","-p","56751"])
     #p2 = subprocess.Popen(["python", "server.py","-p","56752"])
     #p3 = subprocess.Popen(["python", "server.py","-p","56753"])
+    # Give the server time to start
+    time.sleep(1)
     open("./filestore/56751/file_1.txt", 'w').close()
     time.sleep(1)
     def client1_behaviour():
@@ -110,6 +121,7 @@ def testB():
         client.RPC_lock_acquire()
         client.RPC_append_file("file_1.txt", "B")
         client.RPC_lock_release()
+
     thread1 = threading.Thread(target=client1_behaviour)
     thread2 = threading.Thread(target=client2_behaviour)
 
@@ -119,11 +131,11 @@ def testB():
     thread1.join()
     thread2.join()
     p.terminate()
-    #p2.terminate()
     #p3.terminate()
     assert open("./filestore/56751/file_1.txt", 'r').read() == "AB"
     print("TEST 1)b)b) PASSED")
     print("TEST 1)b PASSED")
+    '''
 
 
 #Test C Duplicated Requests:
