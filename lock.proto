@@ -17,12 +17,19 @@ enum Status {
     WORKING_ON_IT = 22;
     LOCK_EXPIRED = 23;
     WAITING_FOR_LOCK_RELEASE = 44;
+    NOT_LEADER = 24;
+
 }
 
 // response struct, adjust or add any fields you want
 message Response {
     Status status = 1;
     int32 id_num = 2;
+}
+
+message leader{
+    Status status = 1;
+    string server = 2;
 }
 
 // file append arguments, add any fields you want
@@ -38,10 +45,27 @@ message Int {
     int32 rc = 1;
 }
 
+
 // New message for sending raw bytes
 message ByteMessage {
     bytes data = 1;  // Raw byte data to send
     int32 lock_val = 2;  // Client identifier
+}
+
+message raft_heartbeat_args {
+    int32 term = 1;
+    bool success = 2;
+} 
+
+message raft_request_args {
+    int32 term = 1;
+    string candidate_id = 2;
+    int32 last_log_index = 3;
+}
+
+message raft_response_args {
+    bool vote_granted = 1;
+    int32 term = 2;
 }
 
 service LockService {
@@ -51,4 +75,7 @@ service LockService {
     rpc file_append(file_args) returns (Response);
     rpc client_close(Int) returns (Response);
     rpc sendBytes(ByteMessage) returns (Response);
+    rpc request_vote(raft_request_args) returns (raft_response_args);
+    rpc heartbeat(raft_request_args) returns (raft_heartbeat_args);
+    rpc get_leader(Int) returns (leader);
 }

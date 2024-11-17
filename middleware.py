@@ -8,6 +8,7 @@ import asyncio
 from typing import Callable
 import uuid
 import lock_pb2
+import lock_pb2_grpc
 
     
 class RetryInterceptor(grpc.UnaryUnaryClientInterceptor):
@@ -84,8 +85,30 @@ class RetryInterceptor(grpc.UnaryUnaryClientInterceptor):
                     else:
                         # If the max attempts have been reached and the server is still working on the request, raise an error
                         # May include switching to a different server in the future.
-                        raise grpc.RpcError("Max attempts reached")
-                    
+                        print("Max attempts reached, switching server")
+                        _, service_name, method_name = client_call_details.method.split('/')
+                        
+                        self.client.leader = self.client.RPC_get_leader()
+                        try:
+                            channel = grpc.insecure_channel(self.client.leader)
+                            stub = lock_pb2_grpc.LockServiceStub(channel)
+                            rpc_method = getattr(stub, method_name)
+                            response = rpc_method(request)
+                            print(f"Response from dynamic invocation: {response}")
+                            return response
+
+                        except AttributeError:
+                            # Handle the case where the method doesn't exist
+                            print(f"Method {method_name} does not exist on the stub.")
+                            raise
+
+                        except grpc.RpcError as e:
+                            # Handle RPC errors
+                            print(f"RPC failed with error: {e}")
+                            raise
+                        
+                        continue
+
                 if actual_response.status == lock_pb2.Status.LOCK_NOT_ACQUIRED:
                     print(f"Lock not acquired, must acquire lock before appending file")
                     return response
@@ -101,8 +124,8 @@ class RetryInterceptor(grpc.UnaryUnaryClientInterceptor):
 
                 # If we've reached the max attempts, raise the error
                 if attempt == self.max_attempts - 1:
-                    raise
-
+                    raise                 
+                    
                 # Wait before retrying
                 delay = self._retry_delay(attempt)
                 if attempt == 0:

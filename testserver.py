@@ -22,11 +22,7 @@ class LockServiceWrapper:
         # Initialize the actual LockService instance with the provided arguments
         self.drop = drop
         self.testing_counter =0
-        if port == 56751:
-            slave=False
-        else:
-             slave=True
-        self._lock_service = LockService(port=port,slave=slave)
+        self._lock_service = LockService(port="127.0.0.1:"+str(port))
     
     def client_init(self, request, context):
         print("Wrapper: client_init called")
@@ -78,6 +74,21 @@ class LockServiceWrapper:
                 self.drop = False
                 time.sleep(12.1)
         return response
+    
+
+    def request_vote(self, request, context):
+        print("Wrapper: request_vote called")
+        return self._lock_service.request_vote(request, context)
+
+    def heartbeat(self, request, context):
+        print("Wrapper: heartbeat called")
+        return self._lock_service.heartbeat(request, context)
+
+    def get_leader(self, request, context):
+        print("Wrapper: get_leader called")
+        return self._lock_service.get_leader(request, context)      
+    
+
     
 
 if __name__ == "__main__":
