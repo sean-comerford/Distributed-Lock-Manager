@@ -7,7 +7,7 @@ class Logger:
     
     def serialize_cache(self,cache):
         def serialize_tuple(response):
-            """Serializes a tuple response (e.g., filename and content)."""
+            """Serialize anything apart from a response status"""
             if response is None:
                 return "none"
             if isinstance(response, dict):
@@ -18,6 +18,7 @@ class Logger:
                 if isinstance(content, bytes):
                     content = content.decode('utf-8')
                 return {'filename': filename, 'content': content}
+            
             if isinstance(response, int):
                 return response
             if isinstance(response, tuple) and len(response) == 2:
@@ -46,7 +47,7 @@ class Logger:
 
 
     def save_log(self, lock_owner, lock_counter, cache, counter, locked):
-        #print(cache)
+        '''Dumps to the persistant log'''
         state = {
             "lock_owner": lock_owner,
             "lock_counter": lock_counter,
@@ -55,10 +56,10 @@ class Logger:
             "cache": self.serialize_cache(cache)
         }
         with open(self.filepath, "w") as f:
-            #print(f"-------------STATE: {state}")
             json.dump(state, f)
 
     def load_log(self):
+        '''Loads from the persistant log'''
         if not os.path.exists(self.filepath):
             return None, 0, {}, 0, False
         with open(self.filepath, "r") as f:

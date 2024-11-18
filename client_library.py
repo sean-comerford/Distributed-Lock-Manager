@@ -28,23 +28,9 @@ class LockClient:
         self.client_id = None
         self.lock_val = None
     
-    def retries(self, max_retries,place,query):
-        """
-        description: retries a function call up to max_retries times
-        input: max_retries, place, query
-        output: response    
-        """
-        retries = 0
-        while retries < max_retries:
-            try:
-                response = place(query)
-                return response
-            except grpc.RpcError as rpc_error:
-                print(f"Client{self.client_id}:Call failed with code: {rpc_error.code()}")
-                retries += 1
-        return False
 
     def RPC_init(self):
+        '''Call client init on server and update the local client ID if success'''
         request = lock_pb2.Int()
         # response = self.retries(max_retries=5,place=self.stub.client_init,query=request)
         response=self.channel_check('client_init',request)
@@ -52,6 +38,7 @@ class LockClient:
         print(f"Client{self.client_id}:Successfully connected to server with client ID: {self.client_id}")
             
     def RPC_lock_acquire(self):
+        '''Call lock acquire on server and update the local lock value if success'''
         request = lock_pb2.lock_args(client_id=self.client_id)
         print(f"Client{self.client_id}:Waiting for lock...")
         response = self.channel_check('lock_acquire',request)
@@ -60,6 +47,7 @@ class LockClient:
             self.lock_val = response.id_num
 
     def RPC_lock_release(self):
+        '''Call lock release on server and reset the local lock value if success'''
         print(f"Client{self.client_id}: Attempting to release lock with client ID: {self.client_id}")
         request = lock_pb2.lock_args(client_id=self.client_id,lock_val=self.lock_val)
         response=self.channel_check('lock_release',request)
@@ -70,17 +58,19 @@ class LockClient:
         self.lock_val = None
 
     def RPC_append_file(self, file, content,test=False):
-            request = lock_pb2.file_args(filename = file , content = bytes(content, 'utf-8'), client_id=self.client_id,lock_val=self.lock_val) # Specify content to append
-            response=self.channel_check('file_append',request)
-            if response.status == lock_pb2.Status.LOCK_NOT_ACQUIRED:
-                print(f"Client{self.client_id}: DID NOT OWN LOCK - reset lock_val")
-                self.lock_val = None
-            if response.status == lock_pb2.Status.WAITING_FOR_LOCK_RELEASE:
-                print(f"Release lock to confirm append")
-            if test:
-                return response.status
+        '''Call file append on server and return if success'''
+        request = lock_pb2.file_args(filename = file , content = bytes(content, 'utf-8'), client_id=self.client_id,lock_val=self.lock_val) # Specify content to append
+        response=self.channel_check('file_append',request)
+        if response.status == lock_pb2.Status.LOCK_NOT_ACQUIRED:
+            print(f"Client{self.client_id}: DID NOT OWN LOCK - reset lock_val")
+            self.lock_val = None
+        if response.status == lock_pb2.Status.WAITING_FOR_LOCK_RELEASE:
+            print(f"Release lock to confirm append")
+        if test:
+            return response.status
 
     def RPC_get_leader(self):
+        '''Discover the leader server by trying all servers in the list'''
         for server in ports:
             try:
                 self.channel = grpc.insecure_channel(server)
@@ -95,6 +85,7 @@ class LockClient:
         raise Exception("Failed to discover leader.")
 
     def RPC_close(self):
+        '''Call client close on server and close the client connection'''
         request = lock_pb2.Int(rc=self.client_id)
         response=self.channel_check('client_close',request)
         # Explicitly closing the gRPC channel.
@@ -102,6 +93,7 @@ class LockClient:
         print(f"Client{self.client_id}:Client connection closed.")
         
     def channel_check(self,method_name,request):
+        '''Check if the channel is active and switch channel if leader is not responsive. Also reinitialise client'''
         while True:
             try:
                 response = getattr(self.stub, method_name)(request)

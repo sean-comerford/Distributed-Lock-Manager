@@ -25,6 +25,7 @@ class RetryInterceptor(grpc.UnaryUnaryClientInterceptor):
         return min(self.initial_backoff * (self.backoff_multiplier ** attempt), self.max_backoff)
 
     def intercept_unary_unary(self, continuation: Callable, client_call_details, request):
+        '''Intercept the client calls and initiates retry process if unwanted/no response from server'''
         # Generate unique request ID
         unique_request_id = str(uuid.uuid4())
 
@@ -57,7 +58,7 @@ class RetryInterceptor(grpc.UnaryUnaryClientInterceptor):
             # Update client_call_details with modified metadata and timeout if this is the first attempt
             client_call_details = client_call_details._replace(
                 metadata=metadata,
-                timeout=2  # Set the call timeout to 10 seconds
+                timeout=2 
             )
 
 

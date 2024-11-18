@@ -24,13 +24,15 @@ from concurrent.futures import ThreadPoolExecutor
 import json
 
 
-timeout = 100
+
+# Server setup
 ports = [
             '127.0.0.1:56751',
             '127.0.0.1:56752',
             '127.0.0.1:56753'
 ]
 
+# Raft states
 class State(Enum):
     FOLLOWER = 1
     CANDIDATE = 2
@@ -38,6 +40,7 @@ class State(Enum):
 
 class LockService(lock_pb2_grpc.LockServiceServicer):
 
+# Initialse the server
     def __init__(self,port="127.0.0.1:56751",deadline=4,drop=False,load=False,ensure_leader=True):
         if(load):
             # Wipe all files, as we assume they are lost on a server crash and must be rebuilt from the persistant log
@@ -50,32 +53,49 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
                         print(f"Deleted {txt_file} after server crash")
             print(f"All files deleted after server crash")
             open("./filestore/56751/file_1.txt", 'w').close()
+
+            # Load the server state from the log
             self.logger = Logger(filepath="./filestore/"+str(port[-5:])+"/"+str(port[-5:])+".json")
             self.ensure_leader = ensure_leader
             self.load_server_state_from_log( deadline=4)
             
         else:
-            self.locked = False #Is Lock locked?
+            # Intialise the lock as unlocked
+            self.locked = False
             self.lock = threading.Lock() #Mutual Exclusion on shared resources (self.locked, client_counter and lock_owner)
             self.condition = threading.Condition(self.lock) #Coordinate access to the lock by allowing threads (clients) to wait until lock availabel
+            # Monotonically increasing counter to track the initialisation number of a client
             self.client_counter = 0
             self.lock_owner = None
-            self.files = {f'file_{i}.txt': [] for i in range(100)} #Change to however we want out files to look
+            self.files = {f'file_{i}.txt': [] for i in range(100)}
+            # Flag to allow server to be restarted not as leader FOR TESTING PURPOSES
             self.ensure_leader=ensure_leader
+            # Initialise the raft attributes
             self.init_raft(port)
             # Cache to store the processed requests and their responses
             self.response_cache = OrderedDict()
+            # Ensuring one client can add to response cache at a time
             self.cache_lock = threading.Lock()
+            # Logger to save the state of the server
             self.logger = Logger(filepath="./filestore/"+str(port[-5:])+"/"+str(port[-5:])+".json")
+            # Monothonically increasing counter to track the number of locks given out
+            # Also used a proxy for index/version of the logs
             self.lock_counter = 0
+            # Background thread to trigger global lock timeout
             self.periodic_thread = threading.Thread(target=self._execute_periodically, daemon=True)
             self.periodic_thread.start()
+            # Background thread to save the logs when they get updated
             self.log_queue = queue.Queue()
             self.logging_thread = threading.Thread(target=self.log_processor, daemon=True)
             self.logging_thread.start()
+            # Time of the last operation that was performed. For tracking lock timeouts
             self.last_action_time = None
+            # Deadline for lock timeout
             self.deadline = timedelta(seconds=deadline)
+            # Background thread to clear the oldest half of the response cache every 30 minutes
             self.start_cache_clear_thread()
+            # Cache to store the critical section operations before they are performed.
+            # These operations will be performed when receiving an RPC_lock_release request
             self.cs_cache = {}
             # Counter to keep track of all the replicas that have updated their log to match the primary
             # Set to 1 as the primary is always up to date with its own log
@@ -84,27 +104,31 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             self.update_log_deadline = 2
             # Boolean to determine if the system is available or not
             self.system_available = True
+            # Port numbers for the other servers in the cluster
             self.available_ports = [56751,56752,56753]
+            # Track the status of the replica ports
             self.port_status = {}
 
             # replication setup
             port_numbers = port[-5:]
             self.folderpath = "./filestore/"+str(port_numbers)
+            # Make the filestore directory if it does not exist
             if not os.path.exists(self.folderpath):
                 os.makedirs(self.folderpath)
 
-            self.slaves = []  # List to store LockServiceStubs for each slave
-            self.queues = []  # List to store queues for each slave
+            self.replicas = []  # List to store LockServiceStubs for each replica
+            self.queues = []  # List to store queues for each replica
             
-            # Dynamically create channels and associated stubs and queues for n slaves
-            available_ports = [56751,56752,56753]
-            available_ports.remove(int(port_numbers))
-            for i in range(len(available_ports)):
-                p = available_ports[i]
+            # Dynamically create channels and associated stubs and queues for n replicas
+            self.available_ports = [56751,56752,56753]
+            self.available_ports.remove(int(port_numbers))
+            for i in range(len(self.available_ports)):
+                p = self.available_ports[i]
                 channel = grpc.insecure_channel(f'localhost:{p}')
                 stub = lock_pb2_grpc.LockServiceStub(channel)
-                self.slaves.append(stub)
+                self.replicas.append(stub)
                 self.queues.append(deque())
+        # After initialisation, log the state of the server
         self.log_state()
 
     def RPC_sendFullLog(self, revived_replica):
@@ -117,8 +141,10 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
 
             # Serialize the log data using the logger class
             data = pickle.dumps((lock_owner, lock_counter, cache, counter, locked))
-            request = lock_pb2.ByteMessage(data=data, lock_val=self.lock_counter)  # Use queue index as client_id for tracking
+            # Request is send with the serialised critical section and the new lock counter value
+            request = lock_pb2.ByteMessage(data=data, lock_val=self.lock_counter) 
 
+            # Send the serialized data to the replica and check the response
             with grpc.insecure_channel(revived_replica) as channel:
                 stub = lock_pb2_grpc.LockServiceStub(channel)
                 response = stub.receiveFullLog(request)
@@ -135,6 +161,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             print(f"Error sending full log: {e}")
 
     def receiveFullLog(self, request, context):
+        '''Receive the full log from the primary server and rebuilds the newly online replica server from it'''
         print("-----SERVER RECEIVED FULL LOG-----")
         try:
             # Deserialize the received data
@@ -154,6 +181,8 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             counter=self.client_counter,
             locked=self.locked
             )
+            # Rebuild the replica from the primary servers log
+            # Write the appends to the corresponding files, creating the files if they dont already exist
             self.rebuild_replica()
             response = lock_pb2.Response(status=lock_pb2.Status.FULL_LOG_UPDATED)
             return response
@@ -163,6 +192,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
 
 
     def RPC_sendBytes(self):
+        '''Send a completed critical section to be duplicated on the replicas'''
         # Serialize the queue data to bytes
         self.log_updated_reply_counter = 1
         if self.role==State.LEADER:
@@ -176,18 +206,20 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
                     
                 
                 data = pickle.dumps(list(queue))  # Serialize the queue
-                request = lock_pb2.ByteMessage(data=data, lock_val=self.lock_counter)  # Use queue index as client_id for tracking.
+                # Request is send with the serialised critical section and the new lock counter value
+                request = lock_pb2.ByteMessage(data=data, lock_val=self.lock_counter)
                 
-                # Send serialized data to the corresponding slave
-                slave_stub = self.slaves[i]  # Get the stub for the corresponding slave
+                # Send serialized data to the corresponding replica
+                replica_stub = self.replicas[i]  # Get the stub for the corresponding replica
                 attempt = 0
                 success = False
                 max_attempts = 5
                 successful_attempt = False
 
+                # Perform retries if the replica does not respond
                 while attempt < max_attempts + 1 and successful_attempt == False:
                     try:
-                        response = slave_stub.sendBytes(request)
+                        response = replica_stub.sendBytes(request)
 
                         # Check response from replica server
                         if response.status == lock_pb2.Status.LOG_UPDATED:
@@ -216,7 +248,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
                     continue
                 
             # Check if enough replicas have updated their logs
-            if self.log_updated_reply_counter > len(self.slaves) // 2:
+            if self.log_updated_reply_counter > len(self.replicas) // 2:
                 print(f"Majority of replicas have updated their logs. Log updated successfully.")
                 self.system_available = True
             else:
@@ -227,15 +259,19 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
 
 
     def sendBytes(self, request, context):
+        '''Receive and append a completed critical section to the replica's log'''
         print("-----SERVER RECEIVED BYTES-----")
         
         try:
             # Deserialize the received data
             received_data = pickle.loads(request.data)
             print(f"Updated lock counter to {request.lock_val} from {self.lock_counter}")
+            # Update internal lock counter to new value
             self.lock_counter = request.lock_val
             # Print each entry in the deserialized data
             print(f"The critical section in received data is {received_data}")
+
+            # Iterate through each critical section in the received data and append it to the file and the response cache
             for cs in received_data:
                 if cs != "":
                     for append_request_id, (filename, content) in cs.items():
@@ -262,6 +298,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
     
 
     def init_raft(self, port):
+        '''Initialise the raft specific attributes'''
         self.port = port
         self.heartbeat_timeout=1
         self.term = 0
@@ -271,9 +308,11 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             self.role = State.LEADER
             self.leader = self.port
             self.term = 1
+            # Sends a heartbeat to all other servers to show that leader is still online
             self.broadcast_heartbeat()
         else:
             self.role = State.FOLLOWER
+            # Replica servers time to receive a heartbeat from the leader server. 
             self.reset_timer()
         
         self.voted_for = None
@@ -283,6 +322,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         
     
     def reset_heartbeat_timer(self):
+        '''Resets the time for the leader to send a heartbeat'''
         if hasattr(self, 'heartbeat_timer') and self.heartbeat_timer is not None:
             self.heartbeat_timer.cancel()
         if(self.role==State.LEADER):
@@ -290,19 +330,23 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             self.heartbeat_timer.start()
         
     def reset_timer(self):
-        #print("Starting Timer")
+        '''If a replica server does receive a heartbeat from the leader within the timeout, it will start an election'''
         if hasattr(self, 'election_timer'):
             self.election_timer.cancel()
         self.election_timer = threading.Timer(random.uniform(2,3), self.start_election)
         self.election_timer.start()
 
     def start_election(self):
+        '''Starts an election to try and become the leader'''
         print("Starting Election")
         self.term += 1
+        # Proposer becomes a candidate and votes for itself
         self.role = State.CANDIDATE
         self.voted_for = self.port
         self.votes_received = 1
 
+        # Concurrently request votes from all other servers
+        # If a response is received, call handle_vote_response to process it
         with ThreadPoolExecutor() as executor:
             futures = {
                 executor.submit(self.RPC_request_vote, peer): peer
@@ -323,6 +367,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
 
 
     def RPC_request_vote(self, peer):
+        '''Get a vote from a peer server, passing the term, ports and lock counter as metadata'''
         with grpc.insecure_channel(peer) as channel:
             stub = lock_pb2_grpc.LockServiceStub(channel)
             request = lock_pb2.raft_request_args(
@@ -341,6 +386,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
 
 
     def handle_vote_response(self, response):
+        '''Candidate gathers responses from other servers and determines if it has enough votes to become the leader'''
         if response.term > self.term:
             self.term = response.term
             self.role = State.FOLLOWER
@@ -356,11 +402,15 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
 
         
     def request_vote(self, request, context):
+        '''Server received RPC_vote_request and decides if they should vote for the candidate'''
         response = lock_pb2.raft_response_args(term=self.term, vote_granted=False)
+        # If the candidate has a higher term, the server will become a follower
         if request.term > self.term:
             self.term = request.term
             self.role = State.FOLLOWER
             self.voted_for = None
+        # If the server has not yet voted, or it voted for the candidate already, and the candidate has a log that is at least as up to date as itself, 
+        # Vote for the candidate and reset the timer
         if (self.voted_for is None or self.voted_for == request.candidate_id) and request.last_log_index >= self.lock_counter:
             response.vote_granted = True
             self.voted_for = request.candidate_id
@@ -368,42 +418,42 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         return response
         
     def broadcast_heartbeat(self):
+        '''Distribute heartbeat to all servers, sent by the leader'''
         for peer in ports:
             if(peer != self.port):
                 threading.Thread(target=self.RPC_heartbeat, args=(peer,)).start()
         self.reset_heartbeat_timer()
         
     def RPC_heartbeat(self, peer):
-        
+        '''RPC function to create and send heartbeat'''
+        # Create a connection to peer server
         with grpc.insecure_channel(peer) as channel:
             stub = lock_pb2_grpc.LockServiceStub(channel)
             request = lock_pb2.raft_request_args(term=self.term, candidate_id=self.port)
             try:
+                # Get response from peer server
                 response = stub.heartbeat(request)
-                port = peer[-5:]  # Extract the port number
+                port = peer[-5:]  # Extract the port number of the peer
+                # Track the previous state of the peer
                 previous_status = self.port_status.get(port, False)
-                #responding_port = response.port_num[-5:]
-                #print(f"Peer is {peer}")
-                # Check if the port has transitioned from false to true, i.e. it has come online
-                if not previous_status:  # Default to False if not already set
-                    # Send the log to the newly online port
-                    #print(f"Port {port} transitioned from False to True")
+                # Check if the port has transitioned from offline(false) to online(true), i.e. it has come online
+                if not previous_status:
+                    # Send log from primary server to newly online replica
                     print(f"Port {peer[-5:]} is online. Sending bytes.")
                     self.RPC_sendFullLog(peer)
                     print(f"Sent bytes to {peer}")
 
                 self.port_status[peer[-5:]] = True
-                #print(f"The responding port status for port {responding_port} is {f'{responding_port}_port_status'}")
-                # if we get response from server that was previously dead, RPC_sendBytes
+                # Handle the heartbeat response from the peer
                 self.heartbeat_response(response)
-                self.system_available = True
             except grpc.RpcError:
+                # Set the status of the peer to False (dead)
                 self.port_status[peer[-5:]] = False
-                #print(f"The responding port status for port {responding_port} is {f'{responding_port}_port_status'}")
                 print("Could not send hearbeat to", peer)
-        #print(f"Port status: {self.port_status}")	
             
     def heartbeat_response(self, response):
+        '''Handle the response from the peer'''
+        # If the term from the peer is higher, the leader will become a follower
         if response.term > self.term:
             self.term = response.term
             self.role = State.FOLLOWER
@@ -411,8 +461,8 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             self.reset_timer()
             
     def heartbeat(self, request, context):
+        '''Receiving an RPC_heartbeat from the leader and becoming a follower if the term from the leader is greater or equal to its own term'''
         response = lock_pb2.raft_heartbeat_args(term=self.term, success=True)
-        #print("Received heartbeat from",request.candidate_id)
         if request.term >= self.term:
             self.term = request.term
             self.role = State.FOLLOWER
@@ -423,6 +473,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         return response
     
     def log_processor(self):
+        '''Get the log state and save it to a log file'''
         while True:
             log_data = self.log_queue.get()
             try:
@@ -433,6 +484,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             self.log_queue.task_done()
 
     def log_state(self):
+        '''Get the current state of the server and put onto the log queue'''
         self.log_queue.put((self.lock_owner, self.lock_counter, self.response_cache, self.client_counter, self.locked))
 
     def _execute_periodically(self):
@@ -440,7 +492,6 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         this thread checks that if a lock owner has been set
         if so, it waits for the deadline to pass and if the lock owner is still the same
         it removes the lock from that client
-        
         """
         while True:
             if self.lock_owner is not None and self.last_action_time is not None:
@@ -496,6 +547,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         self.response_cache[request_id] = response
 
 
+    # FOR TESTING PURPOSES
     def print_metadata(self, context):
         '''Helper method to print metadata from client'''
         metadata_str = ", ".join(f"{key}={value}" for key, value in context.invocation_metadata())
@@ -538,6 +590,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         return None
 
     def load_server_state_from_log(self, drop=False, deadline=4):
+        '''When recovering a single server from the persistant log, load the server state from this persistant log'''
         print("Server Loading from logs")
         self.lock_owner, self.lock_counter, self.response_cache, self.client_counter, self.locked = self.logger.load_log()
         
@@ -572,22 +625,23 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         if not os.path.exists(self.folderpath):
             os.makedirs(self.folderpath)
 
-        self.slaves = []  # List to store LockServiceStubs for each slave
-        self.queues = []  # List to store queues for each slave
+        self.replicas = []  # List to store LockServiceStubs for each replica
+        self.queues = []  # List to store queues for each replica
         
-        # Dynamically create channels and associated stubs and queues for n slaves
-        available_ports = [56751,56752,56753]
-        available_ports.remove(int(port_numbers))
-        for i in range(len(available_ports)):
-            p = available_ports[i]
+        # Dynamically create channels and associated stubs and queues for n replicas
+        self.available_ports = [56751,56752,56753]
+        self.available_ports.remove(int(port_numbers))
+        for i in range(len(self.available_ports)):
+            p = self.available_ports[i]
             channel = grpc.insecure_channel(f'localhost:{p}')
             stub = lock_pb2_grpc.LockServiceStub(channel)
-            self.slaves.append(stub)
+            self.replicas.append(stub)
             self.queues.append(deque())
         self.rebuild_files()
     
     
     def rebuild_files(self):
+        '''When recovering a single server from the persistant log, this function will write of the persistant log into the files'''
         to_remove = []
         for key, value in self.response_cache.items():
             # Check if the value is a dictionary containing 'filename' and 'content'
@@ -607,17 +661,19 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         self.log_state()
 
     def rebuild_replica(self):
-        first_write = True
+        '''Rebuild the replicas from the received primary server's log, when the replica server comes back online'''
+        # First write should overwrite the file on the newly online replica
+        created_files = []
         for key, value in self.response_cache.items():
             # Check if the value is a dictionary containing 'filename' and 'content'
             if isinstance(value, dict):
                 filename = value['filename']
                 content = value['content']
                 # Write the content to the file
-                if first_write:
+                if filename not in created_files:
                     with open(self.folderpath+"/"+filename, 'w') as file:
                         file.write(content)
-                    first_write = False
+                    created_files.append(filename)
                 else:
                     with open(self.folderpath+"/"+filename, 'a') as file:
                         file.write(content)
@@ -632,6 +688,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
 
 
     def get_leader(self,request,context):
+        '''Received an RPC request from the client to see if the server is the leader'''
         if self.role == State.LEADER:
             return lock_pb2.leader(status=lock_pb2.Status.SUCCESS, server=self.port)
         else:
@@ -676,6 +733,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             return response
     
     def lock_acquire(self, request, context):
+        '''Accompying function to RPC_lock_acquire'''
         # Process request
         response = self.process_request(request, context)
         if response:
@@ -701,6 +759,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             return response
         
     def _lock_release(self, lock_timeout=False):
+        '''Accompying function to RPC_lock_release'''
         # if critical section not finished drop it
         # check change to files and queues complete
         with self.condition:
@@ -709,10 +768,10 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             print(f"Lock owner has been set to None")
             self.last_action_time = None
             self.condition.notify_all()
+            # Only append to the queue if the release was explicity called by the client and not a lock timeout
             if self.role==State.LEADER and lock_timeout == False:
                 for queue in self.queues:
                     queue.append(self.cs_cache)
-            #print(self.response_cache)
             self.log_state()
             if self.role==State.LEADER:
                 print(f"Send bytes being called after lock release")
@@ -721,6 +780,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             self.cs_cache.clear()
         
     def lock_release(self, request, context):
+        '''Accompying function to RPC_lock_release'''
         # Process request
         response = self.process_request(request, context)
         if response:
@@ -756,14 +816,15 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             response = lock_pb2.Response(status=lock_pb2.Status.FILE_ERROR)
             self.update_cache(release_request_id, response)
             print(f"Client {request.client_id} attempted to release a lock that was not acquired.")
-            return response #Not a file error but all we have in proto?
+            return response
         else:
             response = lock_pb2.Response(status=lock_pb2.Status.FILE_ERROR)
             self.update_cache(release_request_id, response)
             print(f"Client {request.client_id} attempted to release a lock owned by client {self.lock_owner}.")
-            return response #Again Not file error
+            return response
     
     def file_append(self, request, context):
+        '''Accompying function to RPC_file_append'''
         # Process request
         response = self.process_request(request, context)
         if response:
