@@ -12,6 +12,7 @@ from logger import Logger
 import json
 import glob
 
+
 def clear_json_files():
     # List of file paths to clear
     file_paths = [
@@ -529,6 +530,179 @@ def test4a():
 
     print("TEST 4a PASSED")
 
+
+def test4c():
+    global p
+    global p2
+    global p3
+    clear_json_files()
+    p = subprocess.Popen (["python", "testserver.py","-p","56751"])
+    p2 = subprocess.Popen(["python", "server.py","-p","56752"])
+    p3 = subprocess.Popen(["python", "server.py","-p","56753"])
+    # Allow time for servers to start
+    time.sleep(1)
+    print(f"Servers have started")       
+
+    def client1_behaviour():
+        global p
+        global p2
+        global p3
+        client= LockClient(interceptor=RetryInterceptor())
+        client.RPC_init()
+        client.RPC_lock_acquire()
+        client.RPC_append_file("file_1.txt", "A")
+        client.RPC_append_file("file_1.txt", "A")
+        client.RPC_append_file("file_1.txt", "A")
+        client.RPC_append_file("file_1.txt", "A")
+        client.RPC_append_file("file_1.txt", "A") 
+        print(f"---------------------LOCK RELEASE ABOUT TO BE CALLED BY CLIENT 1---------------------")
+        client.RPC_lock_release()
+
+    def client2_behaviour():
+        global p
+        global p2
+        global p3
+        client= LockClient(interceptor=RetryInterceptor())
+        # Small pause to make sure server client1 releases
+        time.sleep(1)
+        print(f"---------------------LEADER SERVER ABOUT TO CRASH---------------------")
+        p.terminate()
+        time.sleep(1)
+        client.RPC_lock_acquire()
+        client.RPC_append_file("file_1.txt", "B")
+        client.RPC_append_file("file_1.txt", "B")
+        client.RPC_append_file("file_1.txt", "B")
+        client.RPC_append_file("file_1.txt", "B")
+        client.RPC_append_file("file_1.txt", "B")
+        client.RPC_lock_release()
+
+
+    def client3_behaviour():
+        global p
+        global p2
+        global p3
+        client= LockClient(interceptor=RetryInterceptor())
+        # Small pause to make sure this is initialised as client 3 anjd server crashes
+        time.sleep(3)
+        client.RPC_lock_acquire()
+        client.RPC_append_file("file_1.txt", "C")
+        client.RPC_append_file("file_1.txt", "C")
+        client.RPC_append_file("file_1.txt", "C")
+        client.RPC_append_file("file_1.txt", "C")
+        client.RPC_append_file("file_1.txt", "C")
+        client.RPC_lock_release()
+        p = subprocess.Popen(["python", "testserver.py","-p","56751","-x","1"])
+        time.sleep(3)
+        
+    thread1 = threading.Thread(target=client1_behaviour)
+    thread2 = threading.Thread(target=client2_behaviour)
+    thread3 = threading.Thread(target=client3_behaviour)
+
+    # Start the threads
+    thread1.start()
+    thread2.start()
+    thread3.start()
+    thread1.join()
+    thread2.join()
+    thread3.join()
+    p2.terminate()
+    p3.terminate()
+    content_56751_file1 = open("./filestore/56751/file_1.txt", 'r').read()
+    assert content_56751_file1 == "AAAAABBBBBCCCCC" or content_56751_file1 == "AAAAACCCCCBBBBB"
+
+    content_56752_file1 = open("./filestore/56752/file_1.txt", 'r').read()
+    assert content_56752_file1 == "AAAAABBBBBCCCCC" or content_56752_file1 == "AAAAACCCCCBBBBB"
+
+    content_56753_file1 = open("./filestore/56753/file_1.txt", 'r').read()
+    assert content_56753_file1 == "AAAAABBBBBCCCCC" or content_56753_file1 == "AAAAACCCCCBBBBB"
+    
+    assert content_56751_file1==content_56752_file1 and content_56751_file1==content_56753_file1
+
+    print(f"Test 4c has finished")
+    
+def test4d():
+    global p
+    global p2
+    global p3
+    clear_json_files()
+    p = subprocess.Popen (["python", "testserver.py","-p","56751"])
+    p2 = subprocess.Popen(["python", "server.py","-p","56752"])
+    p3 = subprocess.Popen(["python", "server.py","-p","56753"])
+    # Allow time for servers to start
+    time.sleep(1)
+    print(f"Servers have started")       
+
+    def client1_behaviour():
+        global p
+        global p2
+        global p3
+        client= LockClient(interceptor=RetryInterceptor())
+        client.RPC_init()
+        client.RPC_lock_acquire()
+        for i in range(20):
+            client.RPC_append_file("file_1.txt", "A")
+        print(f"---------------------LOCK RELEASE ABOUT TO BE CALLED BY CLIENT 1---------------------")
+        client.RPC_lock_release()
+
+    def client2_behaviour():
+        global p
+        global p2
+        global p3
+        client= LockClient(interceptor=RetryInterceptor())
+        # Small pause to make sure server client1 releases
+        time.sleep(2)
+        client.RPC_init()
+        client.RPC_lock_acquire()
+        for i in range(10):
+            client.RPC_append_file("file_1.txt", "B")
+        print(f"---------------------LEADER SERVER ABOUT TO CRASH---------------------")
+        p.terminate()
+        time.sleep(1)
+        client.RPC_lock_acquire()
+        for i in range(20):
+            client.RPC_append_file("file_1.txt", "B")
+        client.RPC_lock_release
+        
+
+
+    def client3_behaviour():
+        global p
+        global p2
+        global p3
+        client= LockClient(interceptor=RetryInterceptor())
+        # Small pause to make sure this is initialised as client 3 anjd server crashes
+        time.sleep(4)
+        client.RPC_init()
+        client.RPC_lock_acquire()
+        for i in range(20):
+            client.RPC_append_file("file_1.txt", "C")
+        client.RPC_lock_release()
+        p = subprocess.Popen(["python", "testserver.py","-p","56751","-x","1"])
+        time.sleep(3)
+        
+    thread1 = threading.Thread(target=client1_behaviour)
+    thread2 = threading.Thread(target=client2_behaviour)
+    thread3 = threading.Thread(target=client3_behaviour)
+
+    # Start the threads
+    thread1.start()
+    thread2.start()
+    thread3.start()
+    thread1.join()
+    thread2.join()
+    thread3.join()
+    p2.terminate()
+    p3.terminate()
+    content_56751_file1 = open("./filestore/56751/file_1.txt", 'r').read()
+    assert content_56751_file1 == "AAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBBBCCCCCCCCCCCCCCCCCCCC"
+
+    content_56752_file1 = open("./filestore/56752/file_1.txt", 'r').read()
+    assert content_56752_file1 == "AAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBBBCCCCCCCCCCCCCCCCCCCC"
+
+    content_56753_file1 = open("./filestore/56753/file_1.txt", 'r').read()
+    assert content_56753_file1 == "AAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBBBCCCCCCCCCCCCCCCCCCCC"
+    
+    print(f"Test 4d has finished")
 def test4b():
     global p
     global p2
@@ -740,5 +914,5 @@ def test4e():
 # test3b()
 # test4a()
 test4b()
-#test4e()
+#testA()
 

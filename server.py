@@ -38,7 +38,7 @@ class State(Enum):
 
 class LockService(lock_pb2_grpc.LockServiceServicer):
 
-    def __init__(self,port="127.0.0.1:56751",deadline=4,drop=False,load=False):
+    def __init__(self,port="127.0.0.1:56751",deadline=4,drop=False,load=False,ensure_leader=True):
         if(load):
             # Wipe all files, as we assume they are lost on a server crash and must be rebuilt from the persistant log
             for subdir in os.listdir("./filestore"):
@@ -59,6 +59,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             self.client_counter = 0
             self.lock_owner = None
             self.files = {f'file_{i}.txt': [] for i in range(100)} #Change to however we want out files to look
+            self.ensure_leader=ensure_leader
             self.init_raft(port)
             # Cache to store the processed requests and their responses
             self.response_cache = OrderedDict()
@@ -126,7 +127,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
                     print(f"FULL LOG FAILED TO SEND TO NEWLY ONLINE REPLICA")
         
         except grpc.RpcError as e:
-            print(f"Failed to send full log to replica at {peer}: {e}")
+            print(f"Failed to send full log to replica at {revived_replica}: {e}")
         except Exception as e:
             print(f"Error sending full log: {e}")
 
@@ -259,7 +260,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         self.heartbeat_timeout=1
         self.term = 0
         self.leader = None
-        if self.port == "127.0.0.1:56751":
+        if self.port == "127.0.0.1:56751" and self.ensure_leader:
             print("DEFAULT LEADER SET TO 56751")
             self.role = State.LEADER
             self.leader = self.port
@@ -600,6 +601,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         self.log_state()
 
     def rebuild_replica(self):
+        open(self.folderpath+"/"+filename, 'w').close()
         for key, value in self.response_cache.items():
             # Check if the value is a dictionary containing 'filename' and 'content'
             if isinstance(value, dict):
