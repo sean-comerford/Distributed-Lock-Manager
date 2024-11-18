@@ -172,7 +172,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
                     
                 
                 data = pickle.dumps(list(queue))  # Serialize the queue
-                request = lock_pb2.ByteMessage(data=data, lock_val=self.lock_counter)  # Use queue index as client_id for tracking
+                request = lock_pb2.ByteMessage(data=data, lock_val=self.lock_counter)  # Use queue index as client_id for tracking.
                 
                 # Send serialized data to the corresponding slave
                 slave_stub = self.slaves[i]  # Get the stub for the corresponding slave
