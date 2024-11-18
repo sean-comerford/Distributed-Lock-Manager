@@ -55,7 +55,7 @@ def testA():
     p3 = subprocess.Popen(["python", "server.py","-p","56753"])
     clear_json_files()
     open("./filestore/56751/file_1.txt", 'w').close()
-    time.sleep(1)
+    time.sleep(4)
     def client1_behaviour():
         client= LockClient(interceptor=RetryInterceptor())
         client.RPC_init()
@@ -98,7 +98,7 @@ def testB():
     p2 = subprocess.Popen(["python", "server.py","-p","56752"])
     p3 = subprocess.Popen(["python", "server.py","-p","56753"])
     open("./filestore/56751/file_1.txt", 'w').close()
-    time.sleep(1)
+    time.sleep(4)
     def client1_behaviour():
         client= LockClient(interceptor=RetryInterceptor())
         client.RPC_init()
@@ -133,7 +133,7 @@ def testB():
     p2 = subprocess.Popen(["python", "server.py","-p","56752"])
     p3 = subprocess.Popen(["python", "server.py","-p","56753"])
     open("./filestore/56751/file_1.txt", 'w').close()
-    time.sleep(1)
+    time.sleep(4)
     def client1_behaviour():
         client= LockClient(interceptor=RetryInterceptor())
         client.RPC_init()
@@ -170,7 +170,7 @@ def testC():
     p2 = subprocess.Popen(["python", "server.py","-p","56752"])
     p3 = subprocess.Popen(["python", "server.py","-p","56753"])
     open("./filestore/56751/file_1.txt", 'w').close()
-    time.sleep(1)
+    time.sleep(4)
     def client1_behaviour():
         client= LockClient(interceptor=RetryInterceptor())
         client.RPC_init()
@@ -212,7 +212,7 @@ def testD():
     p2 = subprocess.Popen(["python", "server.py","-p","56752"])
     p3 = subprocess.Popen(["python", "server.py","-p","56753"])
     open("./filestore/56751/file_1.txt", 'w').close()
-    time.sleep(1)
+    time.sleep(4)
     def client1_behaviour():
         client= LockClient(interceptor=RetryInterceptor())
         client.RPC_init()
@@ -253,7 +253,7 @@ def test2a():
     p2 = subprocess.Popen(["python", "server.py","-p","56752"])
     p3 = subprocess.Popen(["python", "server.py","-p","56753"])
     open("./filestore/56751/file_1.txt", 'w').close()
-    time.sleep(1)
+    time.sleep(4)
     def client1_behaviour():
         client= LockClient(interceptor=RetryInterceptor())
         client.RPC_init()
@@ -300,7 +300,7 @@ def test2b():
     p2 = subprocess.Popen(["python", "server.py","-p","56752"])
     p3 = subprocess.Popen(["python", "server.py","-p","56753"])
     open("./filestore/56751/file_1.txt", 'w').close()
-    time.sleep(1)
+    time.sleep(4)
     def client1_behaviour():
         client= LockClient(interceptor=RetryInterceptor())
         client.RPC_init()
@@ -351,7 +351,7 @@ def test3a():
     p = subprocess.Popen (["python", "server.py","-p","56751"])
     p2 = subprocess.Popen(["python", "server.py","-p","56752"])
     p3 = subprocess.Popen(["python", "server.py","-p","56753"])
-    time.sleep(1)
+    time.sleep(4)
     print("hello")
     client= LockClient(interceptor=RetryInterceptor())
     client.RPC_init()
@@ -384,7 +384,7 @@ def test3b():
     p = subprocess.Popen (["python", "server.py","-p","56751"])
     p2 = subprocess.Popen(["python", "server.py","-p","56752"])
     p3 = subprocess.Popen(["python", "server.py","-p","56753"])
-    time.sleep(2)
+    time.sleep(4)
     print("hello")
     
     def client1_behaviour():
@@ -455,7 +455,7 @@ def test4a():
     p2 = subprocess.Popen(["python", "server.py","-p","56752"])
     p3 = subprocess.Popen(["python", "server.py","-p","56753"])
     # Allow time for servers to start
-    time.sleep(1)
+    time.sleep(4)
     print(f"Servers have started")
 
     def client1_behaviour():
@@ -637,7 +637,7 @@ def test4d():
     p2 = subprocess.Popen(["python", "server.py","-p","56752"])
     p3 = subprocess.Popen(["python", "server.py","-p","56753"])
     # Allow time for servers to start
-    time.sleep(4)
+    time.sleep(6)
     print(f"Servers have started")       
 
     def client1_behaviour():
@@ -689,7 +689,7 @@ def test4d():
             client.RPC_append_file("file_1.txt", "C")
         client.RPC_lock_release()
         p = subprocess.Popen(["python", "testserver.py","-p","56751","-x","1"])
-        time.sleep(3)
+        time.sleep(6)
         
     thread1 = threading.Thread(target=client1_behaviour)
     thread2 = threading.Thread(target=client2_behaviour)
@@ -925,8 +925,8 @@ test2b()
 test3a()
 test3b()
 test4a()
-# test4b()
-# test4c()
-# test4d()
+test4b()
+test4c()
+test4d()
 #testA()
 

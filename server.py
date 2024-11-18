@@ -105,6 +105,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
                 stub = lock_pb2_grpc.LockServiceStub(channel)
                 self.slaves.append(stub)
                 self.queues.append(deque())
+        self.log_state()
 
     def RPC_sendFullLog(self, revived_replica):
         '''Send the full log to a replica once it comes back online'''
