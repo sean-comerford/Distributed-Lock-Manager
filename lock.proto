@@ -21,6 +21,7 @@ enum Status {
     LOG_UPDATED = 31;
     SYSTEM_UNAVAILABLE = 57;
     LOGS_NEED_UPDATE = 25;
+    FULL_LOG_UPDATED = 26;
 }
 
 // response struct, adjust or add any fields you want
@@ -71,6 +72,11 @@ message raft_response_args {
     int32 last_log_index = 3;
 }
 
+// New message for sending the full log
+message FullLogRequest {
+    bytes data = 1;  // Serialized log data
+}
+
 service LockService {
     rpc client_init(Int) returns (Response);
     rpc lock_acquire(lock_args) returns (Response);
@@ -78,6 +84,7 @@ service LockService {
     rpc file_append(file_args) returns (Response);
     rpc client_close(Int) returns (Response);
     rpc sendBytes(ByteMessage) returns (Response);
+    rpc receiveFullLog(FullLogRequest) returns (Response);  // New RPC method for full log
     rpc request_vote(raft_request_args) returns (raft_response_args);
     rpc heartbeat(raft_request_args) returns (raft_heartbeat_args);
     rpc get_leader(Int) returns (leader);

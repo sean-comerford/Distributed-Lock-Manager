@@ -18,11 +18,11 @@ class LockServiceWrapper:
             if key == "request-id":
                 return value
         
-    def __init__(self, drop=False,port=56751):
+    def __init__(self, drop=False,port=56751,ensure_leader=True):
         # Initialize the actual LockService instance with the provided arguments
         self.drop = drop
         self.testing_counter =0
-        self._lock_service = LockService(port="127.0.0.1:"+str(port))
+        self._lock_service = LockService(port="127.0.0.1:"+str(port),ensure_leader=ensure_leader)
     
     def client_init(self, request, context):
         print("Wrapper: client_init called")
@@ -88,6 +88,9 @@ class LockServiceWrapper:
         print("Wrapper: get_leader called")
         return self._lock_service.get_leader(request, context)      
     
+    def receiveFullLog(self, request, context):
+        print("Wrapper: receiveFullLog called")
+        return self._lock_service.receiveFullLog(request, context)
 
     
 
@@ -102,17 +105,25 @@ if __name__ == "__main__":
     parser.add_argument(
         "-p", "--port",
     )
+    parser.add_argument(
+        "-x", "--xd",
+    )
     args = parser.parse_args()
     if args.port:
         port1=args.port
     else:
         port1=str(56751)
 
+    if args.xd:
+        ensure_leader=False
+    else:
+        ensure_leader=True
+
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=100))
     if args.drop:
-        lock_pb2_grpc.add_LockServiceServicer_to_server(LockServiceWrapper(drop=args.drop,port=port1), server)
+        lock_pb2_grpc.add_LockServiceServicer_to_server(LockServiceWrapper(drop=args.drop,port=port1,ensure_leader=ensure_leader), server)
     else:
-        lock_pb2_grpc.add_LockServiceServicer_to_server(LockServiceWrapper(drop=False,port=port1), server)
+        lock_pb2_grpc.add_LockServiceServicer_to_server(LockServiceWrapper(drop=False,port=port1,ensure_leader=ensure_leader), server)
     server.add_insecure_port(port)
     server.start()
     print("Server started (localhost) on port 56751.")

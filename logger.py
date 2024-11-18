@@ -10,11 +10,22 @@ class Logger:
             """Serializes a tuple response (e.g., filename and content)."""
             if response is None:
                 return "none"
+            if isinstance(response, dict):
+                filename = response.get('filename')
+                content = response.get('content')
+
+                # Ensure content is a string
+                if isinstance(content, bytes):
+                    content = content.decode('utf-8')
+                return {'filename': filename, 'content': content}
             if isinstance(response, int):
                 return response
-            if len(response) == 2:
+            if isinstance(response, tuple) and len(response) == 2:
                 try:
                     filename, content = response
+                    if isinstance(content, bytes):
+                        content = content.decode('utf-8')
+                    return {'filename': filename, 'content': content}
                 except (UnicodeDecodeError, AttributeError):
                     filename,content = response
                 
