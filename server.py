@@ -150,7 +150,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             counter=self.client_counter,
             locked=self.locked
             )
-            #self.rebuild_files()
+            self.rebuild_replica()
             response = lock_pb2.Response(status=lock_pb2.Status.FULL_LOG_UPDATED)
             return response
         except Exception as e:
@@ -579,7 +579,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             self.queues.append(deque())
         self.rebuild_files()
     
-    '''
+    
     def rebuild_files(self):
         to_remove = []
         for key, value in self.response_cache.items():
@@ -598,36 +598,20 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
                 del self.response_cache[key[:-2]]
                 self.response_cache[key[:-2]] = self.response_cache.pop(key)
         self.log_state()
-    '''
-    def rebuild_files(self):
-        """Rebuild files from the response cache and update the cache state."""
-        to_remove = []  # Keys to remove after processing
 
+    def rebuild_replica(self):
         for key, value in self.response_cache.items():
             # Check if the value is a dictionary containing 'filename' and 'content'
-            if isinstance(value, dict) and 'filename' in value and 'content' in value:
+            if isinstance(value, dict):
                 filename = value['filename']
                 content = value['content']
-
-                # Write content to the file
-                with open(self.folderpath + "/" + filename, 'a') as file:  # Use 'w' to overwrite
+                # Write the content to the file
+                with open(self.folderpath+"/"+filename, 'a') as file:
                     file.write(content)
                 print(f"Appended content to {filename}.")
-
-                # Prepare the key for cleanup
-                to_remove.append(key)
             else:
                 print(f"Skipping entry with key {key} as it does not contain a file definition.")
-
-        # Update the response cache
-        for key in to_remove:
-            paired_key = key[:-2]  # Derive the base key
-            if paired_key in self.response_cache:
-                # Move the processed entry to the base key
-                self.response_cache[paired_key] = self.response_cache.pop(key)
-            else:
-                print(f"Warning: No paired base key for {key}. Entry might not be properly paired.")
-                del self.response_cache[key]
+    
 
         # Log the updated state
         self.log_state()
