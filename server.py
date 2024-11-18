@@ -51,7 +51,9 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             print(f"All files deleted after server crash")
             open("./filestore/56751/file_1.txt", 'w').close()
             self.logger = Logger(filepath="./filestore/"+str(port[-5:])+"/"+str(port[-5:])+".json")
+            self.ensure_leader = ensure_leader
             self.load_server_state_from_log( deadline=4)
+            
         else:
             self.locked = False #Is Lock locked?
             self.lock = threading.Lock() #Mutual Exclusion on shared resources (self.locked, client_counter and lock_owner)
@@ -601,24 +603,28 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         self.log_state()
 
     def rebuild_replica(self):
-        open(self.folderpath+"/"+filename, 'w').close()
+        first_write = True
         for key, value in self.response_cache.items():
             # Check if the value is a dictionary containing 'filename' and 'content'
             if isinstance(value, dict):
                 filename = value['filename']
                 content = value['content']
                 # Write the content to the file
-                with open(self.folderpath+"/"+filename, 'a') as file:
-                    file.write(content)
-                print(f"Appended content to {filename}.")
+                if first_write:
+                    with open(self.folderpath+"/"+filename, 'w') as file:
+                        file.write(content)
+                    first_write = False
+                else:
+                    with open(self.folderpath+"/"+filename, 'a') as file:
+                        file.write(content)
+                    print(f"Appended content to {filename}.")
             else:
                 print(f"Skipping entry with key {key} as it does not contain a file definition.")
-    
+
 
         # Log the updated state
         self.log_state()
         print("Files rebuilt and cache updated.")
-
 
 
     def get_leader(self,request,context):

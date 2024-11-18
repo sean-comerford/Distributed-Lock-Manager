@@ -540,7 +540,7 @@ def test4c():
     p2 = subprocess.Popen(["python", "server.py","-p","56752"])
     p3 = subprocess.Popen(["python", "server.py","-p","56753"])
     # Allow time for servers to start
-    time.sleep(1)
+    time.sleep(4)
     print(f"Servers have started")       
 
     def client1_behaviour():
@@ -565,9 +565,12 @@ def test4c():
         client= LockClient(interceptor=RetryInterceptor())
         # Small pause to make sure server client1 releases
         time.sleep(1)
+        client.RPC_init()
         print(f"---------------------LEADER SERVER ABOUT TO CRASH---------------------")
         p.terminate()
-        time.sleep(1)
+        
+        time.sleep(4)
+        
         client.RPC_lock_acquire()
         client.RPC_append_file("file_1.txt", "B")
         client.RPC_append_file("file_1.txt", "B")
@@ -583,7 +586,10 @@ def test4c():
         global p3
         client= LockClient(interceptor=RetryInterceptor())
         # Small pause to make sure this is initialised as client 3 anjd server crashes
-        time.sleep(3)
+        time.sleep(2)
+        client.RPC_init()
+        time.sleep(6)
+        
         client.RPC_lock_acquire()
         client.RPC_append_file("file_1.txt", "C")
         client.RPC_append_file("file_1.txt", "C")
@@ -592,7 +598,7 @@ def test4c():
         client.RPC_append_file("file_1.txt", "C")
         client.RPC_lock_release()
         p = subprocess.Popen(["python", "testserver.py","-p","56751","-x","1"])
-        time.sleep(3)
+        time.sleep(6)
         
     thread1 = threading.Thread(target=client1_behaviour)
     thread2 = threading.Thread(target=client2_behaviour)
@@ -605,6 +611,7 @@ def test4c():
     thread1.join()
     thread2.join()
     thread3.join()
+    p.terminate()
     p2.terminate()
     p3.terminate()
     content_56751_file1 = open("./filestore/56751/file_1.txt", 'r').read()
@@ -618,7 +625,7 @@ def test4c():
     
     assert content_56751_file1==content_56752_file1 and content_56751_file1==content_56753_file1
 
-    print(f"Test 4c has finished")
+    print(f"Test 4c has PASSED")
     
 def test4d():
     global p
@@ -629,7 +636,7 @@ def test4d():
     p2 = subprocess.Popen(["python", "server.py","-p","56752"])
     p3 = subprocess.Popen(["python", "server.py","-p","56753"])
     # Allow time for servers to start
-    time.sleep(1)
+    time.sleep(4)
     print(f"Servers have started")       
 
     def client1_behaviour():
@@ -657,11 +664,14 @@ def test4d():
             client.RPC_append_file("file_1.txt", "B")
         print(f"---------------------LEADER SERVER ABOUT TO CRASH---------------------")
         p.terminate()
-        time.sleep(1)
+        #time.sleep(3)
+        client.RPC_init()
         client.RPC_lock_acquire()
+        print("--------------------20 Bs")
         for i in range(20):
             client.RPC_append_file("file_1.txt", "B")
-        client.RPC_lock_release
+        print(f"---------------------LOCK RELEASE ABOUT TO BE CALLED BY CLIENT 2---------------------")
+        client.RPC_lock_release()
         
 
 
@@ -671,7 +681,7 @@ def test4d():
         global p3
         client= LockClient(interceptor=RetryInterceptor())
         # Small pause to make sure this is initialised as client 3 anjd server crashes
-        time.sleep(4)
+        time.sleep(10)
         client.RPC_init()
         client.RPC_lock_acquire()
         for i in range(20):
@@ -691,6 +701,7 @@ def test4d():
     thread1.join()
     thread2.join()
     thread3.join()
+    p.terminate()
     p2.terminate()
     p3.terminate()
     content_56751_file1 = open("./filestore/56751/file_1.txt", 'r').read()
@@ -702,7 +713,7 @@ def test4d():
     content_56753_file1 = open("./filestore/56753/file_1.txt", 'r').read()
     assert content_56753_file1 == "AAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBBBCCCCCCCCCCCCCCCCCCCC"
     
-    print(f"Test 4d has finished")
+    print(f"Test 4d has PASSED")
 def test4b():
     global p
     global p2
@@ -732,7 +743,7 @@ def test4b():
         time.sleep(10)
         
         p2 = subprocess.Popen(["python", "server.py","-p","56752"])
-        time.sleep(1)
+        time.sleep(4)
         print("server up")
         
 
@@ -904,15 +915,17 @@ def test4e():
 
 
 
-# testA()
-# testB()
-# testC()
-# testD()
-# test2a()
-# test2b()
-# test3a()
-# test3b()
-# test4a()
+testA()
+testB()
+testC()
+testD()
+test2a()
+test2b()
+test3a()
+test3b()
+test4a()
 test4b()
+test4c()
+test4d()
 #testA()
 
