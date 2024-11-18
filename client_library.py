@@ -54,7 +54,7 @@ class LockClient:
     def RPC_lock_acquire(self):
         request = lock_pb2.lock_args(client_id=self.client_id)
         print(f"Client{self.client_id}:Waiting for lock...")
-        response = self.stub.lock_acquire(request)
+        response = self.channel_check('lock_acquire',request)
         if response.status == lock_pb2.Status.SUCCESS:
             print(f"Client{self.client_id}:Lock acquired")
             self.lock_val = response.id_num
@@ -70,7 +70,6 @@ class LockClient:
         self.lock_val = None
 
     def RPC_append_file(self, file, content,test=False):
-        if(self.lock_val is not None):
             request = lock_pb2.file_args(filename = file , content = bytes(content, 'utf-8'), client_id=self.client_id,lock_val=self.lock_val) # Specify content to append
             response=self.channel_check('file_append',request)
             if response.status == lock_pb2.Status.LOCK_NOT_ACQUIRED:
@@ -80,8 +79,6 @@ class LockClient:
                 print(f"Release lock to confirm append")
             if test:
                 return response.status
-        else:
-            print(f"Client{self.client_id}:  ERROR: LOCK_EXPIRED")
 
     def RPC_get_leader(self):
         for server in ports:
@@ -112,6 +109,7 @@ class LockClient:
             except grpc._channel._InactiveRpcError as e:
                 self.leader = self.RPC_get_leader()
                 self.channel = grpc.intercept_channel(grpc.insecure_channel(self.leader),self.interceptor)
+                self.stub = lock_pb2_grpc.LockServiceStub(self.channel)
                 if method_name != 'client_init':
                     self.RPC_init()
                 if method_name == 'lock_release' or method_name == 'file_append':
