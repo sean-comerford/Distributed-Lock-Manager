@@ -9,12 +9,45 @@ import os
 import signal
 import lock_pb2
 from logger import Logger
+import json
 
+def clear_json_files():
+    # List of file paths to clear
+    file_paths = [
+        "./filestore/56751/56751.json",
+        "./filestore/56752/56752.json",
+        "./filestore/56753/56753.json"
+    ]
+    
+    # Iterate over the file paths
+    for file_path in file_paths:
+        # Check if the file exists
+        if os.path.exists(file_path):
+            try:
+                # Write an empty JSON object to the file
+                with open(file_path, "w") as file:
+                    json.dump({}, file)
+                print(f"Cleared: {file_path}")
+            except Exception as e:
+                print(f"Error clearing {file_path}: {e}")
+        else:
+            print(f"File not found: {file_path}")
+    directories = ["./filestore/56751", "./filestore/56752", "./filestore/56753"]
 
+    # Iterate over the directories
+    for directory in directories:
+        # Use glob to find all .txt files in the directory
+        txt_files = glob.glob(os.path.join(directory, "*.txt"))
+        for txt_file in txt_files:
+            try:
+                os.remove(txt_file)  # Delete the .txt file
+                print(f"Deleted: {txt_file}")
+            except Exception as e:
+                print(f"Error deleting {txt_file}: {e}")
 # Test A Packet Delay
 
 def testA():
-    
+    clear_json_files()
     p = subprocess.Popen(["python", "testserver.py","-d","5","-p","56751"])
     p2 = subprocess.Popen(["python", "server.py","-p","56752"])
     p3 = subprocess.Popen(["python", "server.py","-p","56753"])
@@ -57,6 +90,7 @@ def testA():
 
 # Test B: Packet Drop
 def testB():
+    clear_json_files()
     p = subprocess.Popen(["python", "testserver.py","-d","1","-p","56751"])
     p2 = subprocess.Popen(["python", "server.py","-p","56752"])
     p3 = subprocess.Popen(["python", "server.py","-p","56753"])
@@ -128,7 +162,7 @@ def testB():
 
 #Test C Duplicated Requests:
 def testC():
-    
+    clear_json_files()
     p = subprocess.Popen (["python", "testserver.py","-d","3","-p","56751"])
     p2 = subprocess.Popen(["python", "server.py","-p","56752"])
     p3 = subprocess.Popen(["python", "server.py","-p","56753"])
@@ -170,6 +204,7 @@ def testC():
 
 #Test D Combined network failures:
 def testD():
+    clear_json_files()
     p = subprocess.Popen (["python", "testserver.py","-d","4","-p","56751"])
     p2 = subprocess.Popen(["python", "server.py","-p","56752"])
     p3 = subprocess.Popen(["python", "server.py","-p","56753"])
@@ -210,6 +245,7 @@ def testD():
 
 # Part 2: Client Fails/Stucks
 def test2a():
+    clear_json_files()
     p = subprocess.Popen (["python", "testserver.py","-p","56751"])
     p2 = subprocess.Popen(["python", "server.py","-p","56752"])
     p3 = subprocess.Popen(["python", "server.py","-p","56753"])
@@ -256,6 +292,7 @@ def test2a():
 
 # Part 2b: Stucks after editing the file
 def test2b():
+    clear_json_files()
     p = subprocess.Popen (["python", "testserver.py","-p","56751"])
     p2 = subprocess.Popen(["python", "server.py","-p","56752"])
     p3 = subprocess.Popen(["python", "server.py","-p","56753"])
@@ -304,6 +341,7 @@ def test2b():
 
 # test 3)a) single server fail, lock is free
 def test3a():
+    clear_json_files()
     # For testing purposes, make sure the file is empty
     open("./filestore/56751/file_1.txt", 'w').close()
     time.sleep(1)
@@ -335,6 +373,7 @@ def test3a():
     print("TEST 3a PASSED")
 
 def test3b():
+    clear_json_files()
     # For testing purposes, make sure the file is empty
     open("./filestore/56751/file_1.txt", 'w').close()
     time.sleep(1)
@@ -408,6 +447,7 @@ def test4a():
     global p
     global p2
     global p3
+    clear_json_files()
     p = subprocess.Popen (["python", "testserver.py","-p","56751"])
     p2 = subprocess.Popen(["python", "server.py","-p","56752"])
     p3 = subprocess.Popen(["python", "server.py","-p","56753"])
@@ -478,6 +518,7 @@ def test4e():
     global p
     global p2
     global p3
+    clear_json_files()
     p = subprocess.Popen (["python", "testserver.py","-p","56751"])
     p2 = subprocess.Popen(["python", "server.py","-p","56752"])
     p3 = subprocess.Popen(["python", "server.py","-p","56753"])
@@ -509,7 +550,7 @@ def test4e():
         # Allow time for server to restart
         time.sleep(1)
 
-    '''
+    
     def client2_behaviour():
         global p
         global p2
@@ -562,18 +603,18 @@ def test4e():
         client.RPC_append_file("file_5.txt", "C")
         client.RPC_append_file("file_5.txt", "C")
         client.RPC_lock_release()
-    '''
+    
     thread1 = threading.Thread(target=client1_behaviour)
-    #thread2 = threading.Thread(target=client2_behaviour)
-    #thread3 = threading.Thread(target=client3_behaviour)
+    thread2 = threading.Thread(target=client2_behaviour)
+    thread3 = threading.Thread(target=client3_behaviour)
 
     # Start the threads
     thread1.start()
-    #thread2.start()
-    #thread3.start()
+    thread2.start()
+    thread3.start()
     thread1.join()
-    #thread2.join()
-    #thread3.join()
+    thread2.join()
+    thread3.join()
     p.terminate()
     p2.terminate()
     p3.terminate()
