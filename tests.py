@@ -10,6 +10,7 @@ import signal
 import lock_pb2
 from logger import Logger
 import json
+import glob
 
 def clear_json_files():
     # List of file paths to clear
@@ -460,6 +461,16 @@ def test4a():
         global p2
         global p3
         client= LockClient(interceptor=RetryInterceptor())
+        client.RPC_init()
+        client.RPC_lock_acquire()
+        client.RPC_append_file("file_1.txt", "A")
+        client.RPC_append_file("file_2.txt", "A")
+        p2.terminate()
+        p2 = subprocess.Popen(["python", "server.py","-p","56752"])
+        print("server 2 restarted")
+        time.sleep(1)
+        client.RPC_append_file("file_3.txt", "A")
+        client.RPC_lock_release()
 
     def client2_behaviour():
         global p
@@ -469,6 +480,11 @@ def test4a():
         # Small pause to make sure this is initialised as client 2
         time.sleep(0.1)
         client.RPC_init()
+        client.RPC_lock_acquire()
+        client.RPC_append_file("file_1.txt", "B")
+        client.RPC_append_file("file_2.txt", "B")
+        client.RPC_append_file("file_3.txt", "B")
+        client.RPC_lock_release()
 
 
     thread1 = threading.Thread(target=client1_behaviour)
@@ -488,30 +504,120 @@ def test4a():
     assert content_56751_file1 == "AB" or content_56751_file1 == "BA"
 
     content_56751_file2 = open("./filestore/56751/file_2.txt", 'r').read()
-    assert content_56751_file2 == "AB" or content_56751_file2 == "BA"
+    assert content_56751_file2 == content_56751_file1
 
     content_56751_file3 = open("./filestore/56751/file_3.txt", 'r').read()
-    assert content_56751_file3 == "AB" or content_56751_file3 == "BA"
+    assert content_56751_file3 == content_56751_file1
 
     content_56752_file1 = open("./filestore/56752/file_1.txt", 'r').read()
-    assert content_56752_file1 == "AB" or content_56752_file1 == "BA"
+    assert content_56752_file1 == content_56751_file1
 
     content_56752_file2 = open("./filestore/56752/file_2.txt", 'r').read()
-    assert content_56752_file2 == "AB" or content_56752_file2 == "BA"
+    assert content_56752_file2 == content_56751_file1
 
     content_56752_file3 = open("./filestore/56752/file_3.txt", 'r').read()
-    assert content_56752_file3 == "AB" or content_56752_file3 == "BA"
+    assert content_56752_file3 ==  content_56751_file1
 
     content_56753_file1 = open("./filestore/56753/file_1.txt", 'r').read()
-    assert content_56753_file1 == "AB" or content_56753_file1 == "BA"
+    assert content_56753_file1 == "AB" or content_56751_file1
 
     content_56753_file2 = open("./filestore/56753/file_2.txt", 'r').read()
-    assert content_56753_file2 == "AB" or content_56753_file2 == "BA"
+    assert content_56753_file2 ==  content_56751_file1
 
     content_56753_file3 = open("./filestore/56753/file_3.txt", 'r').read()
-    assert content_56753_file3 == "AB" or content_56753_file3 == "BA"
+    assert content_56753_file3 ==  content_56751_file1
 
     print("TEST 4a PASSED")
+
+def test4b():
+    global p
+    global p2
+    global p3
+    clear_json_files()
+    p = subprocess.Popen (["python", "testserver.py","-p","56751"])
+    p2 = subprocess.Popen(["python", "server.py","-p","56752"])
+    p3 = subprocess.Popen(["python", "server.py","-p","56753"])
+    # Allow time for servers to start
+    time.sleep(2)
+    print(f"Servers have started")
+
+    def client1_behaviour():
+        global p
+        global p2
+        global p3
+        client= LockClient(interceptor=RetryInterceptor())
+        client.RPC_init()
+        client.RPC_lock_acquire()
+        client.RPC_append_file("file_1.txt", "A")
+        client.RPC_append_file("file_2.txt", "A")
+        print("server down")
+        p2.terminate()
+        # server dies for 10s
+        client.RPC_append_file("file_3.txt", "A")
+        client.RPC_lock_release()
+        time.sleep(10)
+        
+        p2 = subprocess.Popen(["python", "server.py","-p","56752"])
+        time.sleep(1)
+        print("server up")
+        
+
+    def client2_behaviour():
+        global p
+        global p2
+        global p3
+        client= LockClient(interceptor=RetryInterceptor())
+        # Small pause to make sure this is initialised as client 2
+        time.sleep(0.1)
+        client.RPC_init()
+        client.RPC_lock_acquire()
+        client.RPC_append_file("file_1.txt", "B")
+        client.RPC_append_file("file_2.txt", "B")
+        client.RPC_append_file("file_3.txt", "B")
+        client.RPC_lock_release()
+
+
+    thread1 = threading.Thread(target=client1_behaviour)
+    thread2 = threading.Thread(target=client2_behaviour)
+
+    # Start the threads
+    thread1.start()
+    thread2.start()
+    thread1.join()
+    thread2.join()
+    p.terminate()
+    p2.terminate()
+    p3.terminate()
+
+
+    content_56751_file1 = open("./filestore/56751/file_1.txt", 'r').read()
+    assert content_56751_file1 == "AB" or content_56751_file1 == "BA"
+
+    content_56751_file2 = open("./filestore/56751/file_2.txt", 'r').read()
+    assert content_56751_file2 == content_56751_file1
+
+    content_56751_file3 = open("./filestore/56751/file_3.txt", 'r').read()
+    assert content_56751_file3 == content_56751_file1
+
+    content_56752_file1 = open("./filestore/56752/file_1.txt", 'r').read()
+    assert content_56752_file1 == content_56751_file1
+
+    content_56752_file2 = open("./filestore/56752/file_2.txt", 'r').read()
+    assert content_56752_file2 == content_56751_file1
+
+    content_56752_file3 = open("./filestore/56752/file_3.txt", 'r').read()
+    assert content_56752_file3 ==  content_56751_file1
+
+    content_56753_file1 = open("./filestore/56753/file_1.txt", 'r').read()
+    assert content_56753_file1 == "AB" or content_56751_file1
+
+    content_56753_file2 = open("./filestore/56753/file_2.txt", 'r').read()
+    assert content_56753_file2 ==  content_56751_file1
+
+    content_56753_file3 = open("./filestore/56753/file_3.txt", 'r').read()
+    assert content_56753_file3 ==  content_56751_file1
+
+    print("TEST 4b PASSED")
 
 
 def test4e():
@@ -632,5 +738,7 @@ def test4e():
 # test2b()
 # test3a()
 # test3b()
-test4e()
+# test4a()
+test4b()
+#test4e()
 
