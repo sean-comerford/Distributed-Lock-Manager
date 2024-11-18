@@ -342,7 +342,7 @@ def test3b():
     p = subprocess.Popen (["python", "server.py","-p","56751"])
     p2 = subprocess.Popen(["python", "server.py","-p","56752"])
     p3 = subprocess.Popen(["python", "server.py","-p","56753"])
-    time.sleep(1)
+    time.sleep(2)
     print("hello")
     
     def client1_behaviour():
@@ -364,6 +364,8 @@ def test3b():
         
     def client2_behaviour():
         global p
+        global p2
+        global p3
         client= LockClient(interceptor=RetryInterceptor())
         # Small pause to make sure this is initialised as client 2
         time.sleep(0.1)
@@ -581,13 +583,13 @@ def test4e():
 
 
 
-testA()
-testB()
-testC()
-testD()
-test2a()
-test2b()
-test3a()
-test3b()
-# test4e()
+# testA()
+# testB()
+# testC()
+# testD()
+# test2a()
+# test2b()
+# test3a()
+# test3b()
+test4e()
 

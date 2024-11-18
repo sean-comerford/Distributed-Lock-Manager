@@ -81,6 +81,8 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             self.update_log_deadline = 2
             # Boolean to determine if the system is available or not
             self.system_available = True
+            self.available_ports = [56751,56752,56753]
+            self.port_status = {}
 
             # replication setup
             port_numbers = port[-5:]
@@ -101,6 +103,59 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
                 self.slaves.append(stub)
                 self.queues.append(deque())
 
+    def RPC_sendFullLog(self, revived_replica):
+        '''Send the full log to a replica once it comes back online'''
+        print(f"Sending full log to replica")
+
+        try:
+            # Load the log from the logger
+            lock_owner, lock_counter, cache, counter, locked = self.logger.load_log()
+
+            # Serialize the log data using the logger class
+            data = pickle.dumps((lock_owner, lock_counter, cache, counter, locked))
+            request = lock_pb2.ByteMessage(data=data, lock_val=self.lock_counter)  # Use queue index as client_id for tracking
+
+            with grpc.insecure_channel(revived_replica) as channel:
+                stub = lock_pb2_grpc.LockServiceStub(channel)
+                response = stub.receiveFullLog(request)
+                
+                # Check response from replica server
+                if response.status == lock_pb2.Status.FULL_LOG_UPDATED:
+                    print(f"FULL LOG SUCCESSFULLY SENT TO NEWLY ONLINE REPLICA")
+                else:
+                    print(f"FULL LOG FAILED TO SEND TO NEWLY ONLINE REPLICA")
+        
+        except grpc.RpcError as e:
+            print(f"Failed to send full log to replica at {peer}: {e}")
+        except Exception as e:
+            print(f"Error sending full log: {e}")
+
+    def receiveFullLog(self, request, context):
+        print("-----SERVER RECEIVED FULL LOG-----")
+        try:
+            # Deserialize the received data
+            lock_owner, lock_counter, cache, counter, locked = pickle.loads(request.data)
+            self.lock_owner = lock_owner
+            self.lock_counter = lock_counter
+            self.response_cache = cache
+            self.client_counter = counter
+            self.locked = locked
+            print(f"Replica successfully updated log")
+
+            # Write the updated state to the replica's log file
+            self.logger.save_log(
+            lock_owner=self.lock_owner,
+            lock_counter=self.lock_counter,
+            cache=self.response_cache,
+            counter=self.client_counter,
+            locked=self.locked
+            )
+            #self.rebuild_files()
+            response = lock_pb2.Response(status=lock_pb2.Status.FULL_LOG_UPDATED)
+            return response
+        except Exception as e:
+            # Handle errors during deserialization
+            print("Replica error when updating log:", str(e))
 
 
     def RPC_sendBytes(self):
@@ -312,16 +367,34 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         self.reset_heartbeat_timer()
         
     def RPC_heartbeat(self, peer):
+        
         with grpc.insecure_channel(peer) as channel:
             stub = lock_pb2_grpc.LockServiceStub(channel)
             request = lock_pb2.raft_request_args(term=self.term, candidate_id=self.port)
             try:
                 response = stub.heartbeat(request)
+                port = peer[-5:]  # Extract the port number
+                previous_status = self.port_status.get(port, False)
+                #responding_port = response.port_num[-5:]
+                #print(f"Peer is {peer}")
+                # Check if the port has transitioned from false to true, i.e. it has come online
+                if not previous_status:  # Default to False if not already set
+                    # Send the log to the newly online port
+                    print(f"Port {port} transitioned from False to True")
+                    print(f"Port {peer[-5:]} is online. Sending bytes.")
+                    self.RPC_sendFullLog(peer)
+                    print(f"Sent bytes to {peer}")
+
+                self.port_status[peer[-5:]] = True
+                #print(f"The responding port status for port {responding_port} is {f'{responding_port}_port_status'}")
                 # if we get response from server that was previously dead, RPC_sendBytes
                 self.heartbeat_response(response)
                 self.system_available = True
             except grpc.RpcError:
+                self.port_status[peer[-5:]] = False
+                #print(f"The responding port status for port {responding_port} is {f'{responding_port}_port_status'}")
                 print("Could not send hearbeat to", peer)
+        #print(f"Port status: {self.port_status}")	
             
     def heartbeat_response(self, response):
         if response.term > self.term:
@@ -483,6 +556,8 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         self.update_log_deadline = 2
         # Boolean to determine if the system is available or not
         self.system_available = True
+        self.available_ports = [56751,56752,56753]
+        self.port_status = {}
 
         # replication setup
         port_numbers = port[-5:]
@@ -504,6 +579,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             self.queues.append(deque())
         self.rebuild_files()
     
+    '''
     def rebuild_files(self):
         to_remove = []
         for key, value in self.response_cache.items():
@@ -522,6 +598,41 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
                 del self.response_cache[key[:-2]]
                 self.response_cache[key[:-2]] = self.response_cache.pop(key)
         self.log_state()
+    '''
+    def rebuild_files(self):
+        """Rebuild files from the response cache and update the cache state."""
+        to_remove = []  # Keys to remove after processing
+
+        for key, value in self.response_cache.items():
+            # Check if the value is a dictionary containing 'filename' and 'content'
+            if isinstance(value, dict) and 'filename' in value and 'content' in value:
+                filename = value['filename']
+                content = value['content']
+
+                # Write content to the file
+                with open(self.folderpath + "/" + filename, 'a') as file:  # Use 'w' to overwrite
+                    file.write(content)
+                print(f"Appended content to {filename}.")
+
+                # Prepare the key for cleanup
+                to_remove.append(key)
+            else:
+                print(f"Skipping entry with key {key} as it does not contain a file definition.")
+
+        # Update the response cache
+        for key in to_remove:
+            paired_key = key[:-2]  # Derive the base key
+            if paired_key in self.response_cache:
+                # Move the processed entry to the base key
+                self.response_cache[paired_key] = self.response_cache.pop(key)
+            else:
+                print(f"Warning: No paired base key for {key}. Entry might not be properly paired.")
+                del self.response_cache[key]
+
+        # Log the updated state
+        self.log_state()
+        print("Files rebuilt and cache updated.")
+
 
 
     def get_leader(self,request,context):

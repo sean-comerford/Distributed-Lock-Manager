@@ -88,6 +88,9 @@ class LockServiceWrapper:
         print("Wrapper: get_leader called")
         return self._lock_service.get_leader(request, context)      
     
+    def receiveFullLog(self, request, context):
+        print("Wrapper: receiveFullLog called")
+        return self._lock_service.receiveFullLog(request, context)
 
     
 
