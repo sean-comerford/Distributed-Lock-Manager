@@ -183,8 +183,9 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
                 attempt = 0
                 success = False
                 max_attempts = 5
-                
-                while attempt < max_attempts + 1:
+                successful_attempt = False
+
+                while attempt < max_attempts + 1 and successful_attempt == False:
                     try:
                         response = slave_stub.sendBytes(request)
 
@@ -197,6 +198,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
                             break
                         else:
                             print(f"REPLICATION FAILED for Replica {i+1}, Will retry with {attempt+ 1} out of {max_attempts}...")
+                            successful_attempt = False
 
                     except grpc._channel._InactiveRpcError as e:
                         if attempt == max_attempts - 1:
@@ -233,6 +235,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             print(f"Updated lock counter to {request.lock_val} from {self.lock_counter}")
             self.lock_counter = request.lock_val
             # Print each entry in the deserialized data
+            print(f"The critical section in received data is {received_data}")
             for cs in received_data:
                 if cs != "":
                     for append_request_id, (filename, content) in cs.items():
@@ -384,7 +387,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
                 # Check if the port has transitioned from false to true, i.e. it has come online
                 if not previous_status:  # Default to False if not already set
                     # Send the log to the newly online port
-                    print(f"Port {port} transitioned from False to True")
+                    #print(f"Port {port} transitioned from False to True")
                     print(f"Port {peer[-5:]} is online. Sending bytes.")
                     self.RPC_sendFullLog(peer)
                     print(f"Sent bytes to {peer}")
@@ -811,6 +814,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "-p", "--port", type=int, choices=[56751, 56752, 56753], required=True, help="Port for Raft node"
     )
+
+    parser.add_argument(
+        "-x", "--xd",
+    )
     
     args = parser.parse_args()
     
@@ -822,8 +829,13 @@ if __name__ == "__main__":
         port="127.0.0.1:"+str(args.port)
     else:
         port="127.0.0.1:"+str(56751)
+
+    if args.xd:
+        ensure_leader=False
+    else:
+        ensure_leader=True
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=100))
-    lock_pb2_grpc.add_LockServiceServicer_to_server(LockService(drop=False,load=load,port=port), server)
+    lock_pb2_grpc.add_LockServiceServicer_to_server(LockService(drop=False,load=load,port=port, ensure_leader=ensure_leader), server)
     server.add_insecure_port(port)
     server.start()
     print(f"Server started (localhost) on port {port}.")
