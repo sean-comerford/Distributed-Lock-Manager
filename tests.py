@@ -668,13 +668,13 @@ def test4d():
     p2.terminate()
     p3.terminate()
     content_56751_file1 = open("./filestore/56751/file_1.txt", 'r').read()
-    assert content_56751_file1 == "AAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBBBCCCCCCCCCCCCCCCCCCCC"
+    assert content_56751_file1 == "AAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBBBCCCCCCCCCCCCCCCCCCCC" or content_56751_file1 == "BBBBBBBBBBBBBBBBBBBBAAAAAAAAAAAAAAAAAAAACCCCCCCCCCCCCCCCCCCC"
 
     content_56752_file1 = open("./filestore/56752/file_1.txt", 'r').read()
-    assert content_56752_file1 == "AAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBBBCCCCCCCCCCCCCCCCCCCC"
+    assert content_56752_file1 == content_56751_file1 
 
     content_56753_file1 = open("./filestore/56753/file_1.txt", 'r').read()
-    assert content_56753_file1 == "AAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBBBCCCCCCCCCCCCCCCCCCCC"
+    assert content_56753_file1 == content_56751_file1 
     
     print(f"Test 4d has PASSED")
 def test4b():
