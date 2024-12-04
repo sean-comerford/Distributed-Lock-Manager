@@ -50,9 +50,7 @@ def clear_json_files():
 
 def testA():
     clear_json_files()
-    p = subprocess.Popen(["python", "testserver.py","-d","5","-p","56751"])
-    p2 = subprocess.Popen(["python", "server.py","-p","56752"])
-    p3 = subprocess.Popen(["python", "server.py","-p","56753"])
+    p = subprocess.Popen(["python", "testserver.py","-d","5","-p","56751",'-s','1'])
     clear_json_files()
     open("./filestore/56751/file_1.txt", 'w').close()
     time.sleep(4)
@@ -68,7 +66,7 @@ def testA():
     def client2_behaviour():
         client2 = LockClient(interceptor=RetryInterceptor())             
         client2.RPC_init()
-        time.sleep(0.1)
+        time.sleep(0.2)
         client2.RPC_lock_acquire()
     thread1 = threading.Thread(target=client1_behaviour)
     thread2 = threading.Thread(target=client2_behaviour)
@@ -83,8 +81,6 @@ def testA():
                             
     sys.stdout = sys.__stdout__       
     p.terminate()  
-    p2.terminate()
-    p3.terminate()
     assert open("./filestore/56751/file_1.txt", 'r').read() == ""
    
     
@@ -94,9 +90,7 @@ def testA():
 # Test B: Packet Drop
 def testB():
     clear_json_files()
-    p = subprocess.Popen(["python", "testserver.py","-d","1","-p","56751"])
-    p2 = subprocess.Popen(["python", "server.py","-p","56752"])
-    p3 = subprocess.Popen(["python", "server.py","-p","56753"])
+    p = subprocess.Popen(["python", "testserver.py","-d","1","-p","56751",'-s','1'])
     open("./filestore/56751/file_1.txt", 'w').close()
     time.sleep(4)
     def client1_behaviour():
@@ -121,17 +115,13 @@ def testB():
     thread1.join()
     thread2.join()
     p.terminate()
-    p2.terminate()
-    p3.terminate()
     assert open("./filestore/56751/file_1.txt", 'r').read() == "BA"
 
 
     # part b
     print("TEST b)a) PASSED")
     
-    p = subprocess.Popen (["python", "testserver.py","-d","2","-p","56751"])
-    p2 = subprocess.Popen(["python", "server.py","-p","56752"])
-    p3 = subprocess.Popen(["python", "server.py","-p","56753"])
+    p = subprocess.Popen (["python", "testserver.py","-d","2","-p","56751",'-s','1'])
     open("./filestore/56751/file_1.txt", 'w').close()
     time.sleep(4)
     def client1_behaviour():
@@ -156,8 +146,6 @@ def testB():
     thread1.join()
     thread2.join()
     p.terminate()
-    p2.terminate()
-    p3.terminate()
     assert open("./filestore/56751/file_1.txt", 'r').read() == "AB"
     print("TEST 1)b)b) PASSED")
     print("TEST 1)b PASSED")
@@ -166,9 +154,7 @@ def testB():
 #Test C Duplicated Requests:
 def testC():
     clear_json_files()
-    p = subprocess.Popen (["python", "testserver.py","-d","3","-p","56751"])
-    p2 = subprocess.Popen(["python", "server.py","-p","56752"])
-    p3 = subprocess.Popen(["python", "server.py","-p","56753"])
+    p = subprocess.Popen (["python", "testserver.py","-d","3","-p","56751",'-s','1'])
     open("./filestore/56751/file_1.txt", 'w').close()
     time.sleep(4)
     def client1_behaviour():
@@ -199,8 +185,6 @@ def testC():
     thread1.join()
     thread2.join()
     p.terminate()
-    p2.terminate()
-    p3.terminate()
     assert open("./filestore/56751/file_1.txt", 'r').read() == "ABBA"
     print("TEST C PASSED")
 
@@ -208,9 +192,7 @@ def testC():
 #Test D Combined network failures:
 def testD():
     clear_json_files()
-    p = subprocess.Popen (["python", "testserver.py","-d","4","-p","56751"])
-    p2 = subprocess.Popen(["python", "server.py","-p","56752"])
-    p3 = subprocess.Popen(["python", "server.py","-p","56753"])
+    p = subprocess.Popen (["python", "testserver.py","-d","4","-p","56751",'-s','1'])
     open("./filestore/56751/file_1.txt", 'w').close()
     time.sleep(4)
     def client1_behaviour():
@@ -240,8 +222,6 @@ def testD():
     thread1.join()
     thread2.join()
     p.terminate()
-    p2.terminate()
-    p3.terminate()
     assert open("./filestore/56751/file_1.txt", 'r').read() == "1AB"
     print("TEST D PASSED")
 
@@ -249,9 +229,7 @@ def testD():
 # Part 2: Client Fails/Stucks
 def test2a():
     clear_json_files()
-    p = subprocess.Popen (["python", "testserver.py","-p","56751"])
-    p2 = subprocess.Popen(["python", "server.py","-p","56752"])
-    p3 = subprocess.Popen(["python", "server.py","-p","56753"])
+    p = subprocess.Popen (["python", "testserver.py","-p","56751",'-s','1'])
     open("./filestore/56751/file_1.txt", 'w').close()
     time.sleep(4)
     def client1_behaviour():
@@ -287,8 +265,6 @@ def test2a():
     thread1.join()
     thread2.join()
     p.terminate()
-    p2.terminate()
-    p3.terminate()
     assert open("./filestore/56751/file_1.txt", 'r').read() == "BBAA"
     print("TEST 2a PASSED")
 
@@ -296,9 +272,7 @@ def test2a():
 # Part 2b: Stucks after editing the file
 def test2b():
     clear_json_files()
-    p = subprocess.Popen (["python", "testserver.py","-p","56751"])
-    p2 = subprocess.Popen(["python", "server.py","-p","56752"])
-    p3 = subprocess.Popen(["python", "server.py","-p","56753"])
+    p = subprocess.Popen (["python", "testserver.py","-p","56751",'-s','1'])
     open("./filestore/56751/file_1.txt", 'w').close()
     time.sleep(4)
     def client1_behaviour():
@@ -337,8 +311,6 @@ def test2b():
     thread1.join()
     thread2.join()
     p.terminate()
-    p2.terminate()
-    p3.terminate()
     assert open("./filestore/56751/file_1.txt", 'r').read() == "BBAA"
     print("TEST 2b PASSED")
 
@@ -348,9 +320,7 @@ def test3a():
     # For testing purposes, make sure the file is empty
     open("./filestore/56751/file_1.txt", 'w').close()
     time.sleep(1)
-    p = subprocess.Popen (["python", "server.py","-p","56751"])
-    p2 = subprocess.Popen(["python", "server.py","-p","56752"])
-    p3 = subprocess.Popen(["python", "server.py","-p","56753"])
+    p = subprocess.Popen (["python", "server.py","-p","56751",'-s','1'])
     time.sleep(4)
     print("hello")
     client= LockClient(interceptor=RetryInterceptor())
@@ -361,16 +331,14 @@ def test3a():
     client.RPC_lock_release()
     time.sleep(1)
     p.terminate()
-    # Server files now automatically wiped when server is killed
-    #p = subprocess.Popen (["python", "server.py","-p","56751","-l","1"])
-    p = subprocess.Popen (["python", "server.py","-p","56751"])
+    open("./filestore/56751/file_1.txt", 'w').close()
+
+    p = subprocess.Popen (["python", "server.py","-p","56751","-l","1",'-s','1'])
     time.sleep(1)
     client.RPC_lock_acquire()
     client.RPC_append_file("file_1.txt", "1")
     client.RPC_lock_release()
     p.terminate() 
-    p2.terminate()
-    p3.terminate()  
     
     assert open("./filestore/56751/file_1.txt", 'r').read() == "AA1"
     print("TEST 3a PASSED")
@@ -381,11 +349,8 @@ def test3b():
     open("./filestore/56751/file_1.txt", 'w').close()
     time.sleep(1)
     global p
-    p = subprocess.Popen (["python", "server.py","-p","56751"])
-    p2 = subprocess.Popen(["python", "server.py","-p","56752"])
-    p3 = subprocess.Popen(["python", "server.py","-p","56753"])
+    p = subprocess.Popen (["python", "server.py","-p","56751",'-s','1'])
     time.sleep(4)
-    print("hello")
     
     def client1_behaviour():
         client= LockClient(interceptor=RetryInterceptor())
@@ -406,8 +371,6 @@ def test3b():
         
     def client2_behaviour():
         global p
-        global p2
-        global p3
         client= LockClient(interceptor=RetryInterceptor())
         # Small pause to make sure this is initialised as client 2
         time.sleep(0.1)
@@ -423,7 +386,7 @@ def test3b():
         print(f"SERVER ABOUT TO DIE_________________________________________")
         p.terminate()
         # Server txt files now automatically wiped when server is killed
-        p = subprocess.Popen (["python", "server.py","-p","56751","-l","1"])
+        p = subprocess.Popen (["python", "server.py","-p","56751","-l","1",'-s','1'])
         # Allow time for server to restart
         time.sleep(1)
         print(f"SERVER HAS COME BACK TO LIFE _____________________________")
@@ -439,8 +402,7 @@ def test3b():
     thread1.join()
     thread2.join()
     p.terminate()
-    p2.terminate()
-    p3.terminate()
+   
     
     assert open("./filestore/56751/file_1.txt", 'r').read() == "ABBA"
     print("TEST 3b PASSED")

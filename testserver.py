@@ -18,11 +18,11 @@ class LockServiceWrapper:
             if key == "request-id":
                 return value
         
-    def __init__(self, drop=False,port=56751,ensure_leader=True):
+    def __init__(self, drop=False,port=56751,ensure_leader=True,single=False):
         # Initialize the actual LockService instance with the provided arguments
         self.drop = drop
         self.testing_counter =0
-        self._lock_service = LockService(port="127.0.0.1:"+str(port),ensure_leader=ensure_leader)
+        self._lock_service = LockService(port="127.0.0.1:"+str(port),ensure_leader=ensure_leader,single=single)
     
     def client_init(self, request, context):
         print("Wrapper: client_init called")
@@ -50,7 +50,7 @@ class LockServiceWrapper:
         if self.drop == 3:
                 print(f"\n\n\nSIMULATED PACKET DELAY {request.client_id}.")
                 self.drop = False
-                time.sleep(1)
+                time.sleep(2)
         return self._lock_service.lock_release(request, context)
 
     def sendBytes(self, request, context):
@@ -108,6 +108,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "-x", "--xd",
     )
+    parser.add_argument(
+        "-s", "--singleserver",
+    )
     args = parser.parse_args()
     if args.port:
         port1=args.port
@@ -118,12 +121,16 @@ if __name__ == "__main__":
         ensure_leader=False
     else:
         ensure_leader=True
+        
+    single=False
+    if args.singleserver:
+        single=True
 
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=100))
     if args.drop:
-        lock_pb2_grpc.add_LockServiceServicer_to_server(LockServiceWrapper(drop=args.drop,port=port1,ensure_leader=ensure_leader), server)
+        lock_pb2_grpc.add_LockServiceServicer_to_server(LockServiceWrapper(drop=args.drop,port=port1,ensure_leader=ensure_leader,single=single), server)
     else:
-        lock_pb2_grpc.add_LockServiceServicer_to_server(LockServiceWrapper(drop=False,port=port1,ensure_leader=ensure_leader), server)
+        lock_pb2_grpc.add_LockServiceServicer_to_server(LockServiceWrapper(drop=False,port=port1,ensure_leader=ensure_leader,single=single), server)
     server.add_insecure_port(port)
     server.start()
     print("Server started (localhost) on port 56751.")

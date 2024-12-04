@@ -41,7 +41,7 @@ class State(Enum):
 class LockService(lock_pb2_grpc.LockServiceServicer):
 
 # Initialse the server
-    def __init__(self,port="127.0.0.1:56751",deadline=4,drop=False,load=False,ensure_leader=True):
+    def __init__(self,port="127.0.0.1:56751",deadline=4,drop=False,load=False,ensure_leader=True,single=False):
         if(load):
             # Wipe all files, as we assume they are lost on a server crash and must be rebuilt from the persistant log
             for subdir in os.listdir("./filestore"):
@@ -57,6 +57,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             # Load the server state from the log
             self.logger = Logger(filepath="./filestore/"+str(port[-5:])+"/"+str(port[-5:])+".json")
             self.ensure_leader = ensure_leader
+            self.single=single
             self.load_server_state_from_log( deadline=4)
             
         else:
@@ -70,6 +71,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             self.files = {f'file_{i}.txt': [] for i in range(100)}
             # Flag to allow server to be restarted not as leader FOR TESTING PURPOSES
             self.ensure_leader=ensure_leader
+            self.single=single
             # Initialise the raft attributes
             self.init_raft(port)
             # Cache to store the processed requests and their responses
@@ -195,7 +197,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
         '''Send a completed critical section to be duplicated on the replicas'''
         # Serialize the queue data to bytes
         self.log_updated_reply_counter = 1
-        if self.role==State.LEADER:
+        if self.role==State.LEADER and not self.single:
             # There is one self.queues list for each replica
             # Iterate through each of the replicas and their queue
             for i, queue in enumerate(self.queues):
@@ -309,7 +311,8 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             self.leader = self.port
             self.term = 1
             # Sends a heartbeat to all other servers to show that leader is still online
-            self.broadcast_heartbeat()
+            if not self.single:
+                self.broadcast_heartbeat()
         else:
             self.role = State.FOLLOWER
             # Replica servers time to receive a heartbeat from the leader server. 
@@ -478,7 +481,7 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
             log_data = self.log_queue.get()
             try:
                 self.logger.save_log(*log_data)
-                print("Logged state:" )
+                print("Logged state" )
             except Exception as e:
                 print(f"Error logging state: {e}")
             self.log_queue.task_done()
@@ -585,7 +588,6 @@ class LockService(lock_pb2_grpc.LockServiceServicer):
                 print(f"Lock timeout has been updated")
             return cached_response
         # If request_id is not cached, initialise the cache with the request_id and set the response to None, then proceed to process the request
-        print(f"No cache response found for request {request_id}. Processing request")
         self.initialise_cache(request_id)
         return None
 
@@ -879,6 +881,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "-x", "--xd",
     )
+    parser.add_argument(
+        "-s", "--singleserver",
+    )
     
     args = parser.parse_args()
     
@@ -890,13 +895,15 @@ if __name__ == "__main__":
         port="127.0.0.1:"+str(args.port)
     else:
         port="127.0.0.1:"+str(56751)
-
     if args.xd:
         ensure_leader=False
     else:
         ensure_leader=True
+    single=False
+    if args.singleserver:
+        single=True
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=100))
-    lock_pb2_grpc.add_LockServiceServicer_to_server(LockService(drop=False,load=load,port=port, ensure_leader=ensure_leader), server)
+    lock_pb2_grpc.add_LockServiceServicer_to_server(LockService(drop=False,load=load,port=port, ensure_leader=ensure_leader,single=single), server)
     server.add_insecure_port(port)
     server.start()
     print(f"Server started (localhost) on port {port}.")
