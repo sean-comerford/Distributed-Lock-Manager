@@ -7,7 +7,8 @@ A client library is implemented with an attached interceptor. Every Remote Proce
 ## Design flow
 The below diagram shows the flow of RPC calls in the system in the basic case, i.e. assuming no faults in the network or system components. Whenever the client wants to append to a shared file, it must acquire the lock for that file first. The system ensures atomicity through the use of a critical section cache. Critical section tasks are appended to the critical section cache and only commited once the client calls ``lock_release``. 
 
-![alt text](image.png)
+![Design Flow](https://github.com/user-attachments/assets/28ced9f0-fd2c-41a3-9bca-9d157519e2f8)
+
 
 <ol>
    <li>Clients initialise with the server.</li>
